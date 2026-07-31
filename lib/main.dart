@@ -1,8 +1,8 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'auth_gate.dart';
 import 'firebase_options.dart';
-import 'pages/dashboard_page.dart';
 import 'state/finance_app_state.dart';
 
 // Entry point: Flutter starts running the app from here.
@@ -14,7 +14,9 @@ Future<void> main() async {
 
 // Root widget: keeps global app settings like theme and initial page.
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, this.home});
+
+  final Widget? home;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +39,7 @@ class MyApp extends StatelessWidget {
             bodyMedium: TextStyle(color: Color(0xFF0F172A)),
           ),
         ),
-        home: const DashboardPage(),
+        home: home ?? const AuthGate(),
       ),
     );
   }

@@ -143,4 +143,3 @@ class SavingsGoal {
   final Color statusColor;
   final Color statusBg;
 }
-

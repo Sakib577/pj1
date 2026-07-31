@@ -1,9 +1,12 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'package:pj1/models/finance_models.dart';
 import 'package:pj1/pages/add_transaction_page.dart';
 import 'package:pj1/pages/budget_page.dart';
 import 'package:pj1/pages/categories_page.dart';
+import 'package:pj1/pages/finance_tools_page.dart';
 import 'package:pj1/pages/profile_page.dart';
 import 'package:pj1/pages/savings_page.dart';
 import 'package:pj1/state/finance_app_state.dart';
@@ -17,6 +20,8 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
   // Controls which bottom-tab page is currently visible.
   int _navIndex = 0;
 
@@ -31,7 +36,8 @@ class _DashboardPageState extends State<DashboardPage> {
     // Push categories page and wait for selected category text.
     final selected = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (_) => CategoriesPage(items: FinanceAppScope.of(context).categories),
+        builder: (_) =>
+            CategoriesPage(items: FinanceAppScope.of(context).categories),
       ),
     );
 
@@ -45,6 +51,18 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  void _openTool(FinanceTool tool) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => FinanceToolsPage(tool: tool)));
+  }
+
+  Future<void> _openFromDrawer(VoidCallback action) async {
+    Navigator.of(context).pop();
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    if (mounted) action();
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = FinanceAppScope.of(context);
@@ -54,6 +72,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final isHome = _navIndex == 0;
 
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         toolbarHeight: 72,
         automaticallyImplyLeading: false,
@@ -69,19 +88,19 @@ class _DashboardPageState extends State<DashboardPage> {
                 _navIndex == 1
                     ? 'Monthly Budgets'
                     : _navIndex == 2
-                        ? 'Savings Goals'
-                        : 'Profile',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                    ? 'Savings Goals'
+                    : 'Profile & Settings',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Menu tapped'), behavior: SnackBarBehavior.floating),
-                      );
-                    },
+                    tooltip: 'Open menu',
+                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                     icon: const Icon(Icons.menu, size: 26),
                   ),
                   const Text(
@@ -91,10 +110,16 @@ class _DashboardPageState extends State<DashboardPage> {
                   IconButton(
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Notifications tapped'), behavior: SnackBarBehavior.floating),
+                        const SnackBar(
+                          content: Text('Notifications tapped'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
                       );
                     },
-                    icon: const Icon(Icons.notifications_none_outlined, size: 24),
+                    icon: const Icon(
+                      Icons.notifications_none_outlined,
+                      size: 24,
+                    ),
                   ),
                 ],
               ),
@@ -103,7 +128,10 @@ class _DashboardPageState extends State<DashboardPage> {
                 IconButton(
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('More options tapped'), behavior: SnackBarBehavior.floating),
+                      const SnackBar(
+                        content: Text('More options tapped'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
                     );
                   },
                   icon: const Icon(Icons.more_vert),
@@ -117,7 +145,9 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -138,7 +168,10 @@ class _DashboardPageState extends State<DashboardPage> {
                   actionLabel: 'Create Category',
                   onActionPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Create Category tapped'), behavior: SnackBarBehavior.floating),
+                      const SnackBar(
+                        content: Text('Create Category tapped'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
                     );
                   },
                 ),
@@ -148,7 +181,10 @@ class _DashboardPageState extends State<DashboardPage> {
                   trailing: 'View All',
                   onTrailingPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Showing all transactions'), behavior: SnackBarBehavior.floating),
+                      const SnackBar(
+                        content: Text('Showing all transactions'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
                     );
                   },
                 ),
@@ -172,7 +208,10 @@ class _DashboardPageState extends State<DashboardPage> {
                   trailing: 'View All',
                   onTrailingPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Planned payments opened'), behavior: SnackBarBehavior.floating),
+                      const SnackBar(
+                        content: Text('Planned payments opened'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
                     );
                   },
                 ),
@@ -187,7 +226,10 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
           BudgetPage(budgets: appState.budgets),
-          SavingsPage(overview: appState.savingsOverview, goals: appState.savingsGoals),
+          SavingsPage(
+            overview: appState.savingsOverview,
+            goals: appState.savingsGoals,
+          ),
           const ProfilePage(),
         ],
       ),
@@ -199,7 +241,10 @@ class _DashboardPageState extends State<DashboardPage> {
                 );
                 if (saved == true && mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Transaction saved'), behavior: SnackBarBehavior.floating),
+                    const SnackBar(
+                      content: Text('Transaction saved'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
                   );
                 }
               },
@@ -208,11 +253,235 @@ class _DashboardPageState extends State<DashboardPage> {
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      drawer: _AppDrawer(
+        selectedIndex: _navIndex,
+        onNavigate: (index) {
+          Navigator.of(context).pop();
+          _onNavTap(index);
+        },
+        onOpenCategories: () {
+          _openFromDrawer(() => _openCategories());
+        },
+        onOpenTool: (tool) {
+          _openFromDrawer(() => _openTool(tool));
+        },
+      ),
       bottomNavigationBar: _BottomNavBar(
         currentIndex: _navIndex,
         onTap: _onNavTap,
         showFab: isHome,
       ),
+    );
+  }
+}
+
+class _AppDrawer extends StatelessWidget {
+  const _AppDrawer({
+    required this.selectedIndex,
+    required this.onNavigate,
+    required this.onOpenCategories,
+    required this.onOpenTool,
+  });
+
+  final int selectedIndex;
+  final ValueChanged<int> onNavigate;
+  final VoidCallback onOpenCategories;
+  final ValueChanged<FinanceTool> onOpenTool;
+
+  @override
+  Widget build(BuildContext context) {
+    final user = Firebase.apps.isEmpty
+        ? null
+        : FirebaseAuth.instance.currentUser;
+    final email = user?.email ?? 'Signed-in account';
+
+    return Drawer(
+      child: SafeArea(
+        child: ListView(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              decoration: const BoxDecoration(color: Color(0xFFF59E0B)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const CircleAvatar(
+                    radius: 26,
+                    backgroundColor: Colors.white24,
+                    child: Icon(
+                      Icons.person_outline,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Expense Tracker',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    email,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.verified_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        'Verified account',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            _DrawerNavigationItem(
+              icon: Icons.home_outlined,
+              label: 'Dashboard',
+              selected: selectedIndex == 0,
+              onTap: () => onNavigate(0),
+            ),
+            _DrawerNavigationItem(
+              icon: Icons.grid_view_rounded,
+              label: 'Categories',
+              selected: false,
+              onTap: onOpenCategories,
+            ),
+            _DrawerNavigationItem(
+              icon: Icons.event_note_outlined,
+              label: 'Planned Payments',
+              selected: false,
+              onTap: () => onOpenTool(FinanceTool.plannedPayments),
+            ),
+            _DrawerNavigationItem(
+              icon: Icons.handshake_outlined,
+              label: 'Debts',
+              selected: false,
+              onTap: () => onOpenTool(FinanceTool.debts),
+            ),
+            _DrawerNavigationItem(
+              icon: Icons.shopping_cart_outlined,
+              label: 'Shopping List',
+              selected: false,
+              onTap: () => onOpenTool(FinanceTool.shoppingList),
+            ),
+            _DrawerNavigationItem(
+              icon: Icons.pie_chart_outline_rounded,
+              label: 'Budgets',
+              selected: selectedIndex == 1,
+              onTap: () => onNavigate(1),
+            ),
+            _DrawerNavigationItem(
+              icon: Icons.savings_outlined,
+              label: 'Savings Goals',
+              selected: selectedIndex == 2,
+              onTap: () => onNavigate(2),
+            ),
+            _DrawerNavigationItem(
+              icon: Icons.person_outline,
+              label: 'Profile & Settings',
+              selected: selectedIndex == 3,
+              onTap: () => onNavigate(3),
+            ),
+            _DrawerNavigationItem(
+              icon: Icons.swap_horiz_rounded,
+              label: 'Currency Converter',
+              selected: false,
+              onTap: () => onOpenTool(FinanceTool.converter),
+            ),
+            _DrawerNavigationItem(
+              icon: Icons.ios_share_rounded,
+              label: 'Export Report',
+              selected: false,
+              onTap: () => onOpenTool(FinanceTool.report),
+            ),
+            const Divider(height: 32),
+            const ListTile(
+              leading: Icon(Icons.lock_outline, color: Color(0xFF22C55E)),
+              title: Text('Your data is protected'),
+              subtitle: Text('Only your verified account can access its data.'),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(
+                Icons.logout_rounded,
+                color: Color(0xFFDC2626),
+              ),
+              title: const Text(
+                'Sign Out',
+                style: TextStyle(
+                  color: Color(0xFFDC2626),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              onTap: () async {
+                Navigator.of(context).pop();
+                if (Firebase.apps.isNotEmpty) {
+                  await FirebaseAuth.instance.signOut();
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DrawerNavigationItem extends StatelessWidget {
+  const _DrawerNavigationItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: selected ? const Color(0xFFF59E0B) : const Color(0xFF475569),
+      ),
+      title: Text(
+        label,
+        style: TextStyle(
+          color: selected ? const Color(0xFFF59E0B) : const Color(0xFF0F172A),
+          fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+        ),
+      ),
+      selected: selected,
+      selectedTileColor: const Color(0xFFFFF4E8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+      onTap: onTap,
     );
   }
 }
@@ -226,22 +495,48 @@ class _BalanceCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         children: [
-          const Text('TOTAL BALANCE', style: TextStyle(fontSize: 14, color: Color(0xFF6B7280), fontWeight: FontWeight.w600)),
+          const Text(
+            'TOTAL BALANCE',
+            style: TextStyle(
+              fontSize: 14,
+              color: Color(0xFF6B7280),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 8),
-          Text(formatCurrency(summary.total), style: const TextStyle(fontSize: 44, fontWeight: FontWeight.w800)),
+          Text(
+            formatCurrency(summary.total),
+            style: const TextStyle(fontSize: 44, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(color: const Color(0xFFFFF1D6), borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF1D6),
+              borderRadius: BorderRadius.circular(20),
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(summary.isPositive ? Icons.trending_up : Icons.trending_down, size: 16, color: const Color(0xFFF59E0B)),
+                Icon(
+                  summary.isPositive ? Icons.trending_up : Icons.trending_down,
+                  size: 16,
+                  color: const Color(0xFFF59E0B),
+                ),
                 const SizedBox(width: 6),
-                Text('${summary.deltaPercent.toStringAsFixed(1)}% this month', style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w700)),
+                Text(
+                  '${summary.deltaPercent.toStringAsFixed(1)}% this month',
+                  style: const TextStyle(
+                    color: Color(0xFFF59E0B),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ),
@@ -260,7 +555,12 @@ class _StatsRow extends StatelessWidget {
     return Row(
       children: [
         for (int i = 0; i < stats.length; i++)
-          Expanded(child: Padding(padding: EdgeInsets.only(right: i == stats.length - 1 ? 0 : 12), child: _StatCard(data: stats[i]))),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: i == stats.length - 1 ? 0 : 12),
+              child: _StatCard(data: stats[i]),
+            ),
+          ),
       ],
     );
   }
@@ -272,10 +572,15 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = data.isPositive ? const Color(0xFF16A34A) : const Color(0xFFF97316);
+    final color = data.isPositive
+        ? const Color(0xFF16A34A)
+        : const Color(0xFFF97316);
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -283,11 +588,21 @@ class _StatCard extends StatelessWidget {
             children: [
               Icon(data.icon, color: color, size: 20),
               const SizedBox(width: 8),
-              Text(data.label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+              Text(
+                data.label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          Text(formatCurrency(data.amount), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          Text(
+            formatCurrency(data.amount),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
         ],
       ),
     );
@@ -304,7 +619,9 @@ class _CategoriesRow extends StatelessWidget {
     return SizedBox(
       height: 112,
       child: ListView.separated(
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
         scrollDirection: Axis.horizontal,
         itemCount: categories.length,
         separatorBuilder: (_, __) => const SizedBox(width: 16),
@@ -317,11 +634,17 @@ class _CategoriesRow extends StatelessWidget {
                 Container(
                   width: 64,
                   height: 64,
-                  decoration: BoxDecoration(color: item.color.withOpacity(0.15), shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: item.color.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
                   child: Icon(item.icon, color: item.color, size: 28),
                 ),
                 const SizedBox(height: 8),
-                Text(item.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  item.label,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
               ],
             ),
           );
@@ -351,18 +674,34 @@ class _EmptySectionCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         children: [
           Icon(icon, size: 32, color: const Color(0xFFF59E0B)),
           const SizedBox(height: 10),
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 4),
-          Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF6B7280))),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Color(0xFF6B7280)),
+          ),
           const SizedBox(height: 12),
           TextButton(
             onPressed: onActionPressed,
-            child: Text(actionLabel, style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w700)),
+            child: Text(
+              actionLabel,
+              style: const TextStyle(
+                color: Color(0xFFF59E0B),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -371,7 +710,11 @@ class _EmptySectionCard extends StatelessWidget {
 }
 
 class _EmptyListCard extends StatelessWidget {
-  const _EmptyListCard({required this.title, required this.subtitle, required this.icon});
+  const _EmptyListCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
 
   final String title;
   final String subtitle;
@@ -382,13 +725,19 @@ class _EmptyListCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Row(
         children: [
           Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(color: const Color(0xFFFFF4E8), borderRadius: BorderRadius.circular(14)),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF4E8),
+              borderRadius: BorderRadius.circular(14),
+            ),
             child: Icon(icon, color: const Color(0xFFF59E0B)),
           ),
           const SizedBox(width: 14),
@@ -396,9 +745,15 @@ class _EmptyListCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
                 const SizedBox(height: 4),
-                Text(subtitle, style: const TextStyle(color: Color(0xFF6B7280))),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: Color(0xFF6B7280)),
+                ),
               ],
             ),
           ),
@@ -409,7 +764,11 @@ class _EmptyListCard extends StatelessWidget {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.trailing, this.onTrailingPressed});
+  const _SectionHeader({
+    required this.title,
+    this.trailing,
+    this.onTrailingPressed,
+  });
   final String title;
   final String? trailing;
   final VoidCallback? onTrailingPressed;
@@ -419,11 +778,20 @@ class _SectionHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        ),
         if (trailing != null)
           TextButton(
             onPressed: onTrailingPressed ?? () {},
-            child: Text(trailing!, style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w700)),
+            child: Text(
+              trailing!,
+              style: const TextStyle(
+                color: Color(0xFFF59E0B),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
       ],
     );
@@ -438,13 +806,19 @@ class _TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
         children: [
           Container(
             width: 52,
             height: 52,
-            decoration: BoxDecoration(color: item.iconColor.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: item.iconColor.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Icon(item.icon, color: item.iconColor),
           ),
           const SizedBox(width: 12),
@@ -452,12 +826,27 @@ class _TransactionTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                Text(item.subtitle, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
+                Text(
+                  item.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  item.subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 13,
+                  ),
+                ),
               ],
             ),
           ),
-          Text('${item.negative ? '-' : ''}${formatCurrency(item.amount)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          Text(
+            '${item.negative ? '-' : ''}${formatCurrency(item.amount)}',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
         ],
       ),
     );
@@ -473,7 +862,12 @@ class _PlannedPaymentsRow extends StatelessWidget {
     return Row(
       children: [
         for (var item in items)
-          Expanded(child: Padding(padding: const EdgeInsets.only(right: 8), child: _PlannedPaymentCard(item: item))),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _PlannedPaymentCard(item: item),
+            ),
+          ),
       ],
     );
   }
@@ -487,7 +881,10 @@ class _PlannedPaymentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: item.background, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: item.background,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -496,9 +893,15 @@ class _PlannedPaymentCard extends StatelessWidget {
           Icon(item.icon, color: const Color(0xFF0F172A)),
           const SizedBox(height: 12),
           Text(item.title, style: const TextStyle(fontWeight: FontWeight.w700)),
-          Text(item.due, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+          Text(
+            item.due,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+          ),
           const SizedBox(height: 8),
-          Text(formatCurrency(item.amount), style: const TextStyle(fontWeight: FontWeight.w800)),
+          Text(
+            formatCurrency(item.amount),
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
         ],
       ),
     );
@@ -506,7 +909,11 @@ class _PlannedPaymentCard extends StatelessWidget {
 }
 
 class _BottomNavBar extends StatelessWidget {
-  const _BottomNavBar({required this.currentIndex, required this.onTap, required this.showFab});
+  const _BottomNavBar({
+    required this.currentIndex,
+    required this.onTap,
+    required this.showFab,
+  });
   final int currentIndex;
   final ValueChanged<int> onTap;
   final bool showFab;
@@ -519,15 +926,43 @@ class _BottomNavBar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(child: _NavBarItem(icon: Icons.home_filled, label: 'Home', isSelected: currentIndex == 0, onTap: () => onTap(0))),
-          Expanded(child: _NavBarItem(icon: Icons.account_balance_wallet, label: 'Budgets', isSelected: currentIndex == 1, onTap: () => onTap(1))),
+          Expanded(
+            child: _NavBarItem(
+              icon: Icons.home_filled,
+              label: 'Home',
+              isSelected: currentIndex == 0,
+              onTap: () => onTap(0),
+            ),
+          ),
+          Expanded(
+            child: _NavBarItem(
+              icon: Icons.account_balance_wallet,
+              label: 'Budgets',
+              isSelected: currentIndex == 1,
+              onTap: () => onTap(1),
+            ),
+          ),
           AnimatedContainer(
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeInOutCubic,
             width: showFab ? 40 : 0,
           ),
-          Expanded(child: _NavBarItem(icon: Icons.savings, label: 'Savings', isSelected: currentIndex == 2, onTap: () => onTap(2))),
-          Expanded(child: _NavBarItem(icon: Icons.person, label: 'Profile', isSelected: currentIndex == 3, onTap: () => onTap(3))),
+          Expanded(
+            child: _NavBarItem(
+              icon: Icons.savings,
+              label: 'Savings',
+              isSelected: currentIndex == 2,
+              onTap: () => onTap(2),
+            ),
+          ),
+          Expanded(
+            child: _NavBarItem(
+              icon: Icons.person,
+              label: 'Profile',
+              isSelected: currentIndex == 3,
+              onTap: () => onTap(3),
+            ),
+          ),
         ],
       ),
     );
@@ -535,7 +970,12 @@ class _BottomNavBar extends StatelessWidget {
 }
 
 class _NavBarItem extends StatelessWidget {
-  const _NavBarItem({required this.icon, required this.label, required this.isSelected, required this.onTap});
+  const _NavBarItem({
+    required this.icon,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
   final IconData icon;
   final String label;
   final bool isSelected;
@@ -543,14 +983,23 @@ class _NavBarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? const Color(0xFFF59E0B) : const Color(0xFF9CA3AF);
+    final color = isSelected
+        ? const Color(0xFFF59E0B)
+        : const Color(0xFF9CA3AF);
     return InkWell(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, color: color),
-          Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal)),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+            ),
+          ),
         ],
       ),
     );

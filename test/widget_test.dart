@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pj1/main.dart';
+import 'package:pj1/pages/dashboard_page.dart';
 
 void main() {
-  testWidgets('Dashboard renders and saves a transaction', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Dashboard renders and saves a transaction', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const MyApp(home: DashboardPage()));
 
     expect(find.text('Dashboard'), findsOneWidget);
     expect(find.text('\$0.00'), findsWidgets);
@@ -18,7 +21,10 @@ void main() {
 
     expect(find.text('Add Transaction'), findsOneWidget);
 
-    await tester.enterText(find.byKey(const ValueKey('transaction-title')), 'Coffee');
+    await tester.enterText(
+      find.byKey(const ValueKey('transaction-title')),
+      'Coffee',
+    );
     await tester.tap(find.byKey(const ValueKey('key-2')));
     await tester.tap(find.byKey(const ValueKey('key-5')));
     await tester.tap(find.byKey(const ValueKey('key-.')));

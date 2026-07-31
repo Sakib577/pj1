@@ -1,7 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import '../state/finance_app_state.dart';
 import '../utils/currency_formatters.dart';
+import 'settings_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -9,6 +12,9 @@ class ProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = FinanceAppScope.of(context);
+    final user = Firebase.apps.isEmpty
+        ? null
+        : FirebaseAuth.instance.currentUser;
 
     return SafeArea(
       child: ListView(
@@ -19,36 +25,87 @@ class ProfilePage extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 12, offset: Offset(0, 6))],
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0F000000),
+                  blurRadius: 12,
+                  offset: Offset(0, 6),
+                ),
+              ],
             ),
             child: Column(
               children: [
                 Container(
                   width: 84,
                   height: 84,
-                  decoration: const BoxDecoration(color: Color(0xFFF59E0B), shape: BoxShape.circle),
-                  child: const Icon(Icons.person_outline, size: 40, color: Colors.white),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF59E0B),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.person_outline,
+                    size: 40,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 14),
-                const Text('Your Profile', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                Text(
+                  user?.email ?? 'Your Profile',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                const Text('Connect your account details', style: TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w600)),
+                const Text(
+                  'Your expenses are private to this account.',
+                  style: TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 18),
                 Row(
                   children: [
-                    Expanded(child: _ProfileStat(label: 'Balance', value: formatCurrency(appState.currentBalance))),
+                    Expanded(
+                      child: _ProfileStat(
+                        label: 'Balance',
+                        value: formatCurrency(appState.currentBalance),
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: _ProfileStat(label: 'Income', value: formatCurrency(appState.monthlyIncome))),
+                    Expanded(
+                      child: _ProfileStat(
+                        label: 'Income',
+                        value: formatCurrency(appState.monthlyIncome),
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: _ProfileStat(label: 'Expenses', value: formatCurrency(appState.monthlyExpenses))),
+                    Expanded(
+                      child: _ProfileStat(
+                        label: 'Expenses',
+                        value: formatCurrency(appState.monthlyExpenses),
+                      ),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
           const SizedBox(height: 18),
-          const Text('Account', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const Text(
+            'Account',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 10),
+          _ProfileActionTile(
+            icon: Icons.currency_exchange,
+            title: 'Select Currency',
+            subtitle: 'Choose the default currency used throughout the app',
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
+          ),
           _ProfileActionTile(
             icon: Icons.lock_outline,
             title: 'Privacy',
@@ -71,13 +128,21 @@ class ProfilePage extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: () => _showMessage(context, 'Sign out tapped'),
+              onPressed: () => _signOut(context),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 side: const BorderSide(color: Color(0xFFF59E0B)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
-              child: const Text('Sign Out', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w700)),
+              child: const Text(
+                'Sign Out',
+                style: TextStyle(
+                  color: Color(0xFFF59E0B),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
         ],
@@ -89,6 +154,15 @@ class ProfilePage extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
+  }
+
+  Future<void> _signOut(BuildContext context) async {
+    try {
+      await FirebaseAuth.instance.signOut();
+    } on FirebaseAuthException catch (error) {
+      if (!context.mounted) return;
+      _showMessage(context, error.message ?? 'Could not sign out. Try again.');
+    }
   }
 }
 
@@ -109,9 +183,19 @@ class _ProfileStat extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12, fontWeight: FontWeight.w700)),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF6B7280),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+          ),
         ],
       ),
     );
@@ -119,7 +203,12 @@ class _ProfileStat extends StatelessWidget {
 }
 
 class _ProfileActionTile extends StatelessWidget {
-  const _ProfileActionTile({required this.icon, required this.title, required this.subtitle, required this.onTap});
+  const _ProfileActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String title;

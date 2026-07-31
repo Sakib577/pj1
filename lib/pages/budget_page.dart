@@ -13,23 +13,34 @@ class BudgetPage extends StatelessWidget {
     // Build totals from all category entries so summary stays in sync.
     final totalLimit = budgets.fold<double>(0, (sum, b) => sum + b.limit);
     final totalSpent = budgets.fold<double>(0, (sum, b) => sum + b.spent);
-    final progress = totalLimit == 0 ? 0.0 : (totalSpent / totalLimit).clamp(0.0, 1.0);
+    final progress = totalLimit == 0
+        ? 0.0
+        : (totalSpent / totalLimit).clamp(0.0, 1.0);
 
     return SafeArea(
       child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _BudgetSummaryCard(totalLimit: totalLimit, totalSpent: totalSpent, progress: progress),
+            _BudgetSummaryCard(
+              totalLimit: totalLimit,
+              totalSpent: totalSpent,
+              progress: progress,
+            ),
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Create New Budget tapped'), behavior: SnackBarBehavior.floating),
+                    const SnackBar(
+                      content: Text('Create New Budget tapped'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
                   );
                 },
                 icon: const Icon(Icons.add_circle_outline),
@@ -38,12 +49,17 @@ class BudgetPage extends StatelessWidget {
                   backgroundColor: const Color(0xFFF59E0B),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 18),
-            const _BudgetSectionHeader(title: 'Categories', trailing: 'View All'),
+            const _BudgetSectionHeader(
+              title: 'Categories',
+              trailing: 'View All',
+            ),
             const SizedBox(height: 12),
             if (budgets.isEmpty)
               const _BudgetEmptyState()
@@ -68,14 +84,27 @@ class _BudgetEmptyState extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: const Column(
         children: [
-          Icon(Icons.account_balance_wallet_outlined, size: 34, color: Color(0xFFF59E0B)),
+          Icon(
+            Icons.account_balance_wallet_outlined,
+            size: 34,
+            color: Color(0xFFF59E0B),
+          ),
           SizedBox(height: 10),
-          Text('No budgets yet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          Text(
+            'No budgets yet',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
           SizedBox(height: 4),
-          Text('Create a budget to track category spending.', textAlign: TextAlign.center),
+          Text(
+            'Create a budget to track category spending.',
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
@@ -92,15 +121,27 @@ class _BudgetSectionHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        ),
         if (trailing != null)
           TextButton(
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('$trailing tapped'), behavior: SnackBarBehavior.floating),
+                SnackBar(
+                  content: Text('$trailing tapped'),
+                  behavior: SnackBarBehavior.floating,
+                ),
               );
             },
-            child: Text(trailing!, style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w700)),
+            child: Text(
+              trailing!,
+              style: const TextStyle(
+                color: Color(0xFFF59E0B),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
       ],
     );
@@ -108,7 +149,11 @@ class _BudgetSectionHeader extends StatelessWidget {
 }
 
 class _BudgetSummaryCard extends StatelessWidget {
-  const _BudgetSummaryCard({required this.totalLimit, required this.totalSpent, required this.progress});
+  const _BudgetSummaryCard({
+    required this.totalLimit,
+    required this.totalSpent,
+    required this.progress,
+  });
 
   final double totalLimit;
   final double totalSpent;
@@ -122,20 +167,52 @@ class _BudgetSummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFFF9F0A),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Color(0x33F59E0B), blurRadius: 16, offset: Offset(0, 10))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33F59E0B),
+            blurRadius: 16,
+            offset: Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Total Budget', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+          const Text(
+            'Total Budget',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(formatCurrency(totalLimit), style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800)),
+          Text(
+            formatCurrency(totalLimit),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Spent: ${formatCurrency(totalSpent)}', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
-              Text('${(progress * 100).round()}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              Text(
+                'Spent: ${formatCurrency(totalSpent)}',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                '${(progress * 100).round()}%',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -164,13 +241,21 @@ class _BudgetCategoryCard extends StatelessWidget {
     final progress = (item.spent / item.limit).clamp(0.0, 1.0);
     final isNearLimit = progress >= 0.8;
     final statusText = isNearLimit ? 'Near limit' : 'Healthy';
-    final statusColor = isNearLimit ? const Color(0xFFE36306) : const Color(0xFF16A34A);
+    final statusColor = isNearLimit
+        ? const Color(0xFFE36306)
+        : const Color(0xFF16A34A);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 12, offset: Offset(0, 6))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 12,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,7 +264,10 @@ class _BudgetCategoryCard extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: item.iconBg, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                  color: item.iconBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Icon(item.icon, color: const Color(0xFFF59E0B)),
               ),
               const SizedBox(width: 12),
@@ -187,20 +275,46 @@ class _BudgetCategoryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
-                    Text('${item.daysLeft} days left', style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
+                    Text(
+                      item.label,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    Text(
+                      '${item.daysLeft} days left',
+                      style: const TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 13,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              Text('${formatCurrency(item.spent)} / ${formatCurrency(item.limit)}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w800)),
+              Text(
+                '${formatCurrency(item.spent)} / ${formatCurrency(item.limit)}',
+                textAlign: TextAlign.right,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
             ],
           ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('${(progress * 100).round()}% spent', style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
-              Text(statusText, style: TextStyle(color: statusColor, fontWeight: FontWeight.w700)),
+              Text(
+                '${(progress * 100).round()}% spent',
+                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+              ),
+              Text(
+                statusText,
+                style: TextStyle(
+                  color: statusColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 6),

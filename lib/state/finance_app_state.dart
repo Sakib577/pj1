@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models/finance_models.dart';
+import '../services/exchange_rate_service.dart';
+import '../utils/currency_settings.dart';
 
 class FinanceAppState extends ChangeNotifier {
   double _balance = 0;
@@ -11,44 +13,73 @@ class FinanceAppState extends ChangeNotifier {
   final List<PlannedPayment> _plannedPayments = [];
   final List<BudgetCategory> _budgets = [];
   final List<SavingsGoal> _goals = [];
+  final ExchangeRateService _exchangeRateService = ExchangeRateService();
+  Map<String, double> _usdRates = {'USD': 1};
+  DateTime? _ratesUpdatedAt;
+  bool _ratesLoading = false;
 
   BalanceSummary get balanceSummary => BalanceSummary(
-        total: _balance,
-        deltaPercent: 0,
-        isPositive: _balance >= 0,
-      );
+    total: _balance,
+    deltaPercent: 0,
+    isPositive: _balance >= 0,
+  );
 
   List<StatCardData> get stats => [
-        StatCardData(
-          label: 'Income',
-          amount: _income,
-          icon: Icons.arrow_downward,
-          color: const Color(0xFF22C55E),
-          isPositive: true,
-        ),
-        StatCardData(
-          label: 'Expenses',
-          amount: _expenses,
-          icon: Icons.arrow_upward,
-          color: const Color(0xFFF97316),
-          isPositive: false,
-        ),
-      ];
+    StatCardData(
+      label: 'Income',
+      amount: _income,
+      icon: Icons.arrow_downward,
+      color: const Color(0xFF22C55E),
+      isPositive: true,
+    ),
+    StatCardData(
+      label: 'Expenses',
+      amount: _expenses,
+      icon: Icons.arrow_upward,
+      color: const Color(0xFFF97316),
+      isPositive: false,
+    ),
+  ];
 
   List<TransactionItem> get transactions => List.unmodifiable(_transactions);
   List<CategoryItem> get categories => List.unmodifiable(_categories);
-  List<PlannedPayment> get plannedPayments => List.unmodifiable(_plannedPayments);
+  List<PlannedPayment> get plannedPayments =>
+      List.unmodifiable(_plannedPayments);
   List<BudgetCategory> get budgets => List.unmodifiable(_budgets);
   SavingsOverview get savingsOverview => const SavingsOverview(
-        totalSavings: 0,
-        progress: 0,
-        message: 'No savings goals yet.',
-      );
+    totalSavings: 0,
+    progress: 0,
+    message: 'No savings goals yet.',
+  );
   List<SavingsGoal> get savingsGoals => List.unmodifiable(_goals);
 
   double get currentBalance => _balance;
   double get monthlyIncome => _income;
   double get monthlyExpenses => _expenses;
+  String get currencyCode => CurrencySettings.code;
+  List<String> get availableCurrencyCodes => _usdRates.keys.toList()..sort();
+  DateTime? get ratesUpdatedAt => _ratesUpdatedAt;
+  bool get ratesLoading => _ratesLoading;
+
+  Future<void> refreshExchangeRates() async {
+    if (_ratesLoading) return;
+    _ratesLoading = true;
+    notifyListeners();
+    try {
+      final snapshot = await _exchangeRateService.fetchLatestUsdRates();
+      _usdRates = snapshot.rates;
+      _ratesUpdatedAt = snapshot.updatedAt;
+      CurrencySettings.update(code: currencyCode, rates: _usdRates);
+    } finally {
+      _ratesLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void changeCurrency(String code) {
+    CurrencySettings.update(code: code, rates: _usdRates);
+    notifyListeners();
+  }
 
   void addTransaction({
     required String title,
@@ -57,7 +88,9 @@ class FinanceAppState extends ChangeNotifier {
     required Color iconColor,
     required bool isIncome,
   }) {
-    final value = amount.abs();
+    // Financial totals stay in USD internally; the entered value is converted
+    // from the user's selected display currency using the latest fetched rate.
+    final value = CurrencySettings.toUsd(amount.abs());
     final now = DateTime.now();
 
     _balance += isIncome ? value : -value;
@@ -121,8 +154,11 @@ class FinanceAppState extends ChangeNotifier {
 }
 
 class FinanceAppScope extends InheritedNotifier<FinanceAppState> {
-  const FinanceAppScope({super.key, required FinanceAppState notifier, required super.child})
-      : super(notifier: notifier);
+  const FinanceAppScope({
+    super.key,
+    required FinanceAppState notifier,
+    required super.child,
+  }) : super(notifier: notifier);
 
   static FinanceAppState of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<FinanceAppScope>();

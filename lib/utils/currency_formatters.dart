@@ -1,6 +1,9 @@
+import 'currency_settings.dart';
+
 String formatCurrency(double value) {
-  final isNegative = value < 0;
-  final absoluteValue = value.abs();
+  final displayedValue = CurrencySettings.fromUsd(value);
+  final isNegative = displayedValue < 0;
+  final absoluteValue = displayedValue.abs();
   // Build comma-separated thousands manually so no extra intl package is needed.
   final parts = absoluteValue.toStringAsFixed(2).split('.');
   final digits = parts.first;
@@ -13,11 +16,18 @@ String formatCurrency(double value) {
   }
 
   final formattedWhole = buffer.toString().split('').reversed.join();
-  return '${isNegative ? '-' : ''}\$${formattedWhole}.${parts.last}';
+  return '${isNegative ? '-' : ''}${CurrencySettings.symbol}${formattedWhole}.${parts.last}';
 }
 
 String formatCurrencyNoCents(double value) {
   // Reuse full formatter first, then trim trailing .00 for cleaner UI labels.
   final formatted = formatCurrency(value);
-  return formatted.endsWith('.00') ? formatted.substring(0, formatted.length - 3) : formatted;
+  return formatted.endsWith('.00')
+      ? formatted.substring(0, formatted.length - 3)
+      : formatted;
+}
+
+String formatCurrencyInput(double value) {
+  final parts = value.toStringAsFixed(2).split('.');
+  return '${CurrencySettings.symbol}${parts.first}.${parts.last}';
 }

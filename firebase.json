@@ -1,1 +1,25 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"expense-tracker-sakib","appId":"1:422037416643:android:f80bb4193a252b56665076","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"expense-tracker-sakib","configurations":{"android":"1:422037416643:android:f80bb4193a252b56665076","web":"1:422037416643:web:9199d90ae69b4e98665076"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "expense-tracker-sakib",
+          "appId": "1:422037416643:android:f80bb4193a252b56665076",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "expense-tracker-sakib",
+          "configurations": {
+            "android": "1:422037416643:android:f80bb4193a252b56665076",
+            "web": "1:422037416643:web:9199d90ae69b4e98665076"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

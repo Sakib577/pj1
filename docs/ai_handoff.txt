@@ -1,0 +1,91 @@
+Expense Tracker Flutter App - AI Handoff
+========================================
+
+Purpose
+-------
+This is a Flutter expense tracker for Android and Web. It currently has a polished UI shell,
+email/password authentication, email verification, and Firestore access control. It is not yet
+persisting transactions to Firestore or to an encrypted local database.
+
+Technology
+----------
+- Flutter / Dart
+- Firebase Core, Firebase Authentication, Cloud Firestore
+- HTTP client with ExchangeRate-API's open endpoint for daily USD-based FX rates
+- Firebase project ID: expense-tracker-sakib
+- Android application ID: com.sakib.expensetracker
+- Supported Firebase platforms: Android and Web
+
+Important files
+---------------
+- lib/main.dart: initializes Firebase, sets the theme, starts MyApp.
+- lib/auth_gate.dart: routes signed-out users to AuthPage, unverified users to
+  EmailVerificationPage, and verified users to DashboardPage.
+- lib/pages/auth_page.dart: email/password sign-up and sign-in.
+- lib/pages/email_verification_page.dart: resend verification email and refresh verification state.
+- lib/pages/dashboard_page.dart: home screen and bottom navigation.
+- lib/state/finance_app_state.dart: current in-memory financial state. It is lost on app restart.
+- lib/models/finance_models.dart: UI-facing model classes. They contain Flutter IconData and Color,
+  so they should not be used directly as Firestore database models.
+- lib/pages/add_transaction_page.dart: transaction form; currently calls in-memory addTransaction.
+- lib/pages/profile_page.dart: displays the signed-in email and signs out.
+- lib/pages/settings_page.dart: lets the user refresh live rates and select a display currency.
+- lib/pages/finance_tools_page.dart: planned payments, debts, shopping-list, converter, and report tools.
+- lib/services/exchange_rate_service.dart: fetches USD exchange rates from ExchangeRate-API.
+- lib/utils/currency_settings.dart: current display currency and loaded rates.
+- firestore.rules: deployed Firestore rules.
+- firebase.json: Firebase CLI configuration and the Firestore rules reference.
+- lib/firebase_options.dart: generated Firebase configuration. Do not edit manually.
+
+Authentication and security
+---------------------------
+- Email/Password Authentication is enabled in Firebase Console.
+- On account creation, the app sends a verification email.
+- Users cannot open the dashboard until they verify their email and tap "I verified my email".
+- Firestore rules are deployed. They allow only verified users to access their own path:
+  users/{uid}/... . All other Firestore paths are denied.
+- If rules change, deploy them with:
+  firebase deploy --only firestore:rules --project expense-tracker-sakib
+
+Current behavior
+----------------
+- A verified user can sign in, view the empty dashboard, add an in-memory transaction, and sign out.
+- The side drawer includes planned payments, debts, shopping list, currency conversion, report copy,
+  profile/settings, budgets, savings, categories, and sign out.
+- Currency settings loads the provider's supported ISO currencies at runtime. All amount formatting uses
+  the selected display currency. Financial totals are held internally in USD and newly entered amounts
+  are converted to USD using the currently loaded rate.
+- The planned-payment, debt, and shopping-list pages currently store their added items in page memory;
+  they disappear when the page/app is closed.
+- The report feature currently copies a plain-text report to the clipboard. Add a real CSV/PDF download
+  once report records are persisted.
+- Transactions disappear on restart and are not shared between devices yet.
+- Budgets, savings goals, categories, and planned payments are UI placeholders.
+
+Recommended next work
+---------------------
+1. Implement a serializable Transaction model separate from TransactionItem.
+   Store money as integer cents, not double. Include ID, title, amountCents, type, categoryId,
+   createdAt, updatedAt, and sync status.
+2. Add a repository that reads/writes transactions at:
+   users/{currentUser.uid}/transactions/{transactionId}
+   Use Firestore snapshots to render the dashboard.
+3. Add encrypted offline storage for Android/iOS/macOS (for example Drift + SQLCipher) and keep
+   the encryption key in flutter_secure_storage. Firestore offline cache alone is not a complete
+   app-controlled encrypted local database.
+4. Design conflict handling and an offline sync queue before treating the local database as the
+   primary source of truth.
+5. Add categories, budgets, savings goals, planned payments, edit/delete transactions, and tests.
+6. Add password reset, resend-email cooldown, account deletion, error telemetry, and App Check
+   before production release.
+
+Development notes
+-----------------
+- Run web: flutter run -d chrome
+- Test: flutter test
+- Flutter analyze currently reports 11 pre-existing style/unused-code warnings outside the Firebase
+  authentication work.
+- Firebase email-link sign-in is NOT enabled. It is separate from email verification. On the Spark
+  plan, email-link sign-in email delivery has a small quota; use verification links for now.
+- The open ExchangeRate-API endpoint updates daily and requires attribution. The Settings and converter
+  pages include this attribution. Cache rates locally before production use to avoid unnecessary calls.

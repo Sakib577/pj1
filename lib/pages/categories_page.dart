@@ -10,24 +10,37 @@ class CategoriesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('All Categories'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('All Categories'), centerTitle: true),
       body: items.isEmpty
           ? Center(
               child: Container(
                 margin: const EdgeInsets.all(20),
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: const Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.grid_view_rounded, size: 34, color: Color(0xFFF59E0B)),
+                    Icon(
+                      Icons.grid_view_rounded,
+                      size: 34,
+                      color: Color(0xFFF59E0B),
+                    ),
                     SizedBox(height: 10),
-                    Text('No categories yet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    Text(
+                      'No categories yet',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     SizedBox(height: 4),
-                    Text('Add categories to organize your spending.', textAlign: TextAlign.center),
+                    Text(
+                      'Add categories to organize your spending.',
+                      textAlign: TextAlign.center,
+                    ),
                   ],
                 ),
               ),
@@ -62,14 +75,18 @@ class CategoriesPage extends StatelessWidget {
                         const SizedBox(width: 12),
                         Text(
                           item.label,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
+                          ),
                         ),
                       ],
                     ),
                   ),
                 );
               },
-      ),
+            ),
     );
   }
 }

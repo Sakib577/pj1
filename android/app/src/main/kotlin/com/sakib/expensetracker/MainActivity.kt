@@ -1,4 +1,4 @@
-package com.example.pj1
+package com.sakib.expensetracker
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "422037416643",
+    "project_id": "expense-tracker-sakib",
+    "storage_bucket": "expense-tracker-sakib.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:422037416643:android:f80bb4193a252b56665076",
+        "android_client_info": {
+          "package_name": "com.sakib.expensetracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_cTybBir_diYOMC1h9CPB9LhvqUlCOCU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

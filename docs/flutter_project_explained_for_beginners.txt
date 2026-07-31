@@ -1,0 +1,254 @@
+Flutter Expense Tracker Project - Beginner Friendly Guide (Updated)
+===============================================================
+
+Who this guide is for
+---------------------
+This guide is for beginners who are learning Flutter and Dart.
+You do not need previous app development experience.
+
+What this app currently does
+----------------------------
+This project is an expense tracker UI demo.
+It currently includes:
+- Dashboard with balance, stats, categories, transactions, and planned payments.
+- Bottom tabs: Home, Budgets, Savings, Profile.
+- Add Transaction screen with keypad.
+- Demo/mock data (no database yet).
+
+Important update
+----------------
+The app is now split into multiple files (good for learning and maintenance).
+Earlier versions of this guide described a single large `main.dart` file.
+Now each responsibility is in its own file/folder.
+
+
+PART 1 - Quick folder map
+=========================
+
+Main folders under `lib/`:
+- `lib/main.dart` -> app entry and theme setup only.
+- `lib/pages/` -> each screen/page widget.
+- `lib/models/` -> data model classes.
+- `lib/data/` -> demo/mock data constants.
+- `lib/utils/` -> helper functions (formatting, etc.).
+
+Think of it like this:
+- pages = what user sees
+- models = shape of the data
+- data = current sample values
+- utils = reusable helper logic
+
+
+PART 2 - File-by-file explanation
+=================================
+
+1) `lib/main.dart`
+------------------
+- App starts in `main()`.
+- `runApp(const MyApp())` loads the root widget.
+- `MyApp` sets theme (colors, app bar style, text style).
+- Home screen is `DashboardPage`.
+
+2) `lib/pages/dashboard_page.dart`
+----------------------------------
+This is the main screen and navigation controller.
+
+Key ideas:
+- `_navIndex` stores selected bottom tab.
+  - `0 = Home`
+  - `1 = Budgets`
+  - `2 = Savings`
+  - `3 = Profile`
+- `_onNavTap(index)` updates `_navIndex` with `setState`.
+- `IndexedStack` shows tab pages and keeps other tabs alive.
+- Home tab contains multiple reusable private widgets:
+  - `_BalanceCard`
+  - `_StatsRow`
+  - `_CategoriesRow`
+  - `_TransactionTile`
+  - `_PlannedPaymentCard`
+- FAB (+) opens `AddTransactionPage`.
+- `View All` in categories opens `CategoriesPage` and gets selection back.
+
+3) `lib/pages/categories_page.dart`
+-----------------------------------
+- Shows all categories in a list.
+- Tap one category -> returns selected name using `Navigator.pop(value)`.
+
+4) `lib/pages/add_transaction_page.dart`
+----------------------------------------
+State variables:
+- `_isIncome` -> income/expense toggle.
+- `_amount` -> amount text typed via keypad.
+- `_categoryIndex` -> selected category.
+
+Main methods:
+- `_onDigitTap(value)` handles keypad input rules.
+- `_onSave()` closes page and shows success SnackBar.
+
+Layout tips:
+- `LayoutBuilder` adapts spacing and keypad height for short/tall screens.
+- This page is stateful because user input changes UI.
+
+5) `lib/pages/budget_page.dart`
+-------------------------------
+- Receives a list of `BudgetCategory`.
+- Calculates total budget, total spent, and progress.
+- Renders summary card + category cards.
+
+6) `lib/pages/savings_page.dart`
+--------------------------------
+- Receives `SavingsOverview` and list of `SavingsGoal`.
+- Shows savings summary progress and goal cards.
+- Each goal computes its own progress (`current / target`).
+
+7) `lib/pages/profile_page.dart`
+--------------------------------
+- Simple placeholder profile page for now.
+
+8) `lib/models/finance_models.dart`
+-----------------------------------
+Contains data classes used by UI:
+- `BalanceSummary`
+- `StatCardData`
+- `CategoryItem`
+- `TransactionItem`
+- `PlannedPayment`
+- `BudgetCategory`
+- `SavingsOverview`
+- `SavingsGoal`
+
+These classes are plain containers (easy to read, no complex logic).
+
+9) `lib/data/mock_data.dart`
+----------------------------
+- Keeps all demo data in one place (`AppMockData`).
+- Pages read this data instead of hardcoding values directly.
+- Easy future step: replace this with API/database data.
+
+10) `lib/utils/currency_formatters.dart`
+----------------------------------------
+- `formatCurrency(double)` -> formats like `$4,250.80`.
+- `formatCurrencyNoCents(double)` -> removes `.00` when possible.
+- Uses custom logic to avoid extra dependency for now.
+
+
+PART 3 - Navigation flow (simple)
+=================================
+
+App start:
+- `main()` -> `MyApp` -> `DashboardPage`
+
+From dashboard:
+- Tap bottom tabs to switch pages.
+- Tap `View All` in categories -> opens `CategoriesPage`.
+- Select category -> returns to dashboard and shows SnackBar.
+- Tap `+` FAB -> opens `AddTransactionPage`.
+- Tap Save -> go back and show "Transaction saved".
+
+
+PART 4 - State management used right now
+========================================
+
+Current style:
+- Local state with `setState` inside widgets.
+
+Why this is fine now:
+- App is still small.
+- Easy for beginners to understand.
+
+As app grows later, you may move to:
+- Provider
+- Riverpod
+- Bloc
+
+
+PART 5 - How to read this project as a beginner
+================================================
+
+Recommended reading order:
+1. `lib/main.dart`
+2. `lib/pages/dashboard_page.dart`
+3. `lib/data/mock_data.dart`
+4. `lib/models/finance_models.dart`
+5. `lib/pages/add_transaction_page.dart`
+6. `lib/pages/budget_page.dart`
+7. `lib/pages/savings_page.dart`
+8. `lib/utils/currency_formatters.dart`
+
+While reading, ask:
+- Where does this data come from?
+- Which state variable controls this UI?
+- Which tap event changes the state?
+
+
+PART 6 - Demo vs real app (important)
+=====================================
+
+Currently demo:
+- No real save to storage.
+- No backend integration.
+- Several buttons are UI placeholders.
+
+To make it production-ready later:
+- Add local DB/API.
+- Add input validation.
+- Add loading and error states.
+- Add more tests.
+- Use proper international formatting package (`intl`) when needed.
+
+
+PART 7 - Mini glossary
+======================
+
+- Widget: building block of UI.
+- StatefulWidget: widget with changing state.
+- setState: tells Flutter to rebuild UI after change.
+- Scaffold: page skeleton (app bar, body, FAB, etc.).
+- Navigator: screen/page navigation system.
+- SnackBar: short message at bottom.
+- const: immutable compile-time value.
+
+
+Final mental model
+==================
+
+This project is now organized as:
+1) App shell (`main.dart`)
+2) Feature pages (`pages/`)
+3) Shared data shapes (`models/`)
+4) Demo content (`data/`)
+5) Utility helpers (`utils/`)
+
+This structure is a strong beginner-friendly foundation.
+
+PART 8 - Color note: 0xFF0F172A (dark foreground)
+===============================================
+
+This project uses a specific dark color literal in several places: Color(0xFF0F172A).
+It's the app's primary dark foreground color used for text and icons where a strong,
+high-contrast foreground is needed on light backgrounds. Here are the places it appears
+and why:
+
+- `lib/main.dart`
+  - `AppBarTheme.foregroundColor`: default color for AppBar icons and text.
+  - `TextTheme.bodyMedium`: default body text color used app-wide.
+
+- `lib/pages/savings_page.dart`
+  - Goal title (`Text`): used as strong primary text for goal headings.
+
+- `lib/pages/add_transaction_page.dart`
+  - Category label (selected state): when a category is selected, show a dark label
+    so selection is clear.
+
+- `lib/pages/categories_page.dart`
+  - Category list item label: primary text color for list entries.
+
+- `lib/pages/dashboard_page.dart`
+  - Planned payment card icon: keep icon color consistent with other primary text/icons.
+
+Note: Repeating the same literal in multiple files is fine for small projects, but it
+can be helpful to centralize theme colors later (e.g., create `AppColors.primaryForeground`)
+so changes are easier. If you'd like, I can refactor the project to use a named color
+constant instead of repeating the hex literal.
+End of file.

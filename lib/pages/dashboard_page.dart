@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-import 'package:pj1/data/mock_data.dart';
 import 'package:pj1/models/finance_models.dart';
 import 'package:pj1/pages/add_transaction_page.dart';
 import 'package:pj1/pages/budget_page.dart';
 import 'package:pj1/pages/categories_page.dart';
 import 'package:pj1/pages/profile_page.dart';
 import 'package:pj1/pages/savings_page.dart';
+import 'package:pj1/state/finance_app_state.dart';
 import 'package:pj1/utils/currency_formatters.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -31,7 +31,7 @@ class _DashboardPageState extends State<DashboardPage> {
     // Push categories page and wait for selected category text.
     final selected = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (_) => const CategoriesPage(items: AppMockData.categories),
+        builder: (_) => CategoriesPage(items: FinanceAppScope.of(context).categories),
       ),
     );
 
@@ -47,6 +47,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = FinanceAppScope.of(context);
+    final summary = appState.balanceSummary;
+    final stats = appState.stats;
+    final transactions = appState.transactions;
     final isHome = _navIndex == 0;
 
     return Scaffold(
@@ -73,7 +77,11 @@ class _DashboardPageState extends State<DashboardPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Menu tapped'), behavior: SnackBarBehavior.floating),
+                      );
+                    },
                     icon: const Icon(Icons.menu, size: 26),
                   ),
                   const Text(
@@ -81,7 +89,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                   ),
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Notifications tapped'), behavior: SnackBarBehavior.floating),
+                      );
+                    },
                     icon: const Icon(Icons.notifications_none_outlined, size: 24),
                   ),
                 ],
@@ -89,7 +101,11 @@ class _DashboardPageState extends State<DashboardPage> {
         actions: _navIndex == 1 || _navIndex == 2
             ? [
                 IconButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('More options tapped'), behavior: SnackBarBehavior.floating),
+                    );
+                  },
                   icon: const Icon(Icons.more_vert),
                 ),
               ]
@@ -105,9 +121,9 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _BalanceCard(summary: AppMockData.balance),
+                _BalanceCard(summary: summary),
                 const SizedBox(height: 16),
-                _StatsRow(stats: AppMockData.stats),
+                _StatsRow(stats: stats),
                 const SizedBox(height: 20),
                 _SectionHeader(
                   title: 'Categories',
@@ -115,43 +131,77 @@ class _DashboardPageState extends State<DashboardPage> {
                   onTrailingPressed: _openCategories,
                 ),
                 const SizedBox(height: 12),
-                _CategoriesRow(
-                  categories: AppMockData.categories,
-                  onCategoryTap: (item) {
+                _EmptySectionCard(
+                  title: 'No categories yet',
+                  subtitle: 'Create your first category to organize spending.',
+                  icon: Icons.grid_view_rounded,
+                  actionLabel: 'Create Category',
+                  onActionPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${item.label} tapped'), behavior: SnackBarBehavior.floating),
+                      const SnackBar(content: Text('Create Category tapped'), behavior: SnackBarBehavior.floating),
                     );
                   },
                 ),
                 const SizedBox(height: 24),
-                const _SectionHeader(title: 'Recent Transactions', trailing: 'View All'),
-                const SizedBox(height: 12),
-                ...AppMockData.transactions.map(
-                  (item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _TransactionTile(item: item),
-                  ),
+                _SectionHeader(
+                  title: 'Recent Transactions',
+                  trailing: 'View All',
+                  onTrailingPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Showing all transactions'), behavior: SnackBarBehavior.floating),
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
-                const _SectionHeader(title: 'Planned Payments', trailing: 'View All'),
+                if (transactions.isEmpty)
+                  const _EmptyListCard(
+                    title: 'No transactions yet',
+                    subtitle: 'Add your first transaction to start tracking.',
+                    icon: Icons.receipt_long,
+                  )
+                else
+                  ...transactions.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _TransactionTile(item: item),
+                    ),
+                  ),
                 const SizedBox(height: 12),
-                _PlannedPaymentsRow(items: AppMockData.plannedPayments),
+                _SectionHeader(
+                  title: 'Planned Payments',
+                  trailing: 'View All',
+                  onTrailingPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Planned payments opened'), behavior: SnackBarBehavior.floating),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                const _EmptyListCard(
+                  title: 'No planned payments yet',
+                  subtitle: 'Schedule upcoming bills once you create them.',
+                  icon: Icons.event_note_outlined,
+                ),
                 const SizedBox(height: 24),
               ],
             ),
           ),
-          BudgetPage(budgets: AppMockData.budgetCategories),
-          SavingsPage(overview: AppMockData.savingsOverview, goals: AppMockData.savingsGoals),
+          BudgetPage(budgets: appState.budgets),
+          SavingsPage(overview: appState.savingsOverview, goals: appState.savingsGoals),
           const ProfilePage(),
         ],
       ),
       floatingActionButton: isHome
           ? FloatingActionButton(
-              onPressed: () {
-                // Open add transaction form from Home tab.
-                Navigator.of(context).push(
+              onPressed: () async {
+                final saved = await Navigator.of(context).push<bool>(
                   MaterialPageRoute(builder: (_) => const AddTransactionPage()),
                 );
+                if (saved == true && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Transaction saved'), behavior: SnackBarBehavior.floating),
+                  );
+                }
               },
               backgroundColor: const Color(0xFFF59E0B),
               child: const Icon(Icons.add, color: Colors.white),
@@ -191,7 +241,7 @@ class _BalanceCard extends StatelessWidget {
               children: [
                 Icon(summary.isPositive ? Icons.trending_up : Icons.trending_down, size: 16, color: const Color(0xFFF59E0B)),
                 const SizedBox(width: 6),
-                Text('${summary.deltaPercent}% this month', style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w700)),
+                Text('${summary.deltaPercent.toStringAsFixed(1)}% this month', style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -267,7 +317,7 @@ class _CategoriesRow extends StatelessWidget {
                 Container(
                   width: 64,
                   height: 64,
-                  decoration: BoxDecoration(color: item.color.withValues(alpha: 0.15), shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: item.color.withOpacity(0.15), shape: BoxShape.circle),
                   child: Icon(item.icon, color: item.color, size: 28),
                 ),
                 const SizedBox(height: 8),
@@ -276,6 +326,83 @@ class _CategoriesRow extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _EmptySectionCard extends StatelessWidget {
+  const _EmptySectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.actionLabel,
+    required this.onActionPressed,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String actionLabel;
+  final VoidCallback onActionPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        children: [
+          Icon(icon, size: 32, color: const Color(0xFFF59E0B)),
+          const SizedBox(height: 10),
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF6B7280))),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: onActionPressed,
+            child: Text(actionLabel, style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyListCard extends StatelessWidget {
+  const _EmptyListCard({required this.title, required this.subtitle, required this.icon});
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(color: const Color(0xFFFFF4E8), borderRadius: BorderRadius.circular(14)),
+            child: Icon(icon, color: const Color(0xFFF59E0B)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text(subtitle, style: const TextStyle(color: Color(0xFF6B7280))),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -317,7 +444,7 @@ class _TransactionTile extends StatelessWidget {
           Container(
             width: 52,
             height: 52,
-            decoration: BoxDecoration(color: item.iconColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: item.iconColor.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
             child: Icon(item.icon, color: item.iconColor),
           ),
           const SizedBox(width: 12),
@@ -429,5 +556,3 @@ class _NavBarItem extends StatelessWidget {
     );
   }
 }
-
-

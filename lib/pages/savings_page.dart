@@ -25,7 +25,7 @@ class SavingsPage extends StatelessWidget {
               child: ElevatedButton.icon(
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Create Goal tapped'), behavior: SnackBarBehavior.floating),
+                    const SnackBar(content: Text('Create New Goal tapped'), behavior: SnackBarBehavior.floating),
                   );
                 },
                 icon: const Icon(Icons.add_circle_outline),
@@ -44,7 +44,11 @@ class SavingsPage extends StatelessWidget {
               children: [
                 const Text('Active Goals', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                 TextButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Filter tapped'), behavior: SnackBarBehavior.floating),
+                    );
+                  },
                   icon: const Icon(Icons.tune, size: 18),
                   label: const Text('Filter'),
                   style: TextButton.styleFrom(
@@ -55,13 +59,38 @@ class SavingsPage extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            for (final goal in goals) ...[
-              _SavingsGoalCard(goal: goal),
-              const SizedBox(height: 12),
-            ],
+            if (goals.isEmpty)
+              const _SavingsEmptyState()
+            else
+              for (final goal in goals) ...[
+                _SavingsGoalCard(goal: goal),
+                const SizedBox(height: 12),
+              ],
             const SizedBox(height: 16),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SavingsEmptyState extends StatelessWidget {
+  const _SavingsEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+      child: const Column(
+        children: [
+          Icon(Icons.savings_outlined, size: 34, color: Color(0xFFF59E0B)),
+          SizedBox(height: 10),
+          Text('No savings goals yet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          SizedBox(height: 4),
+          Text('Create goals to start saving toward targets.', textAlign: TextAlign.center),
+        ],
       ),
     );
   }
@@ -196,4 +225,3 @@ class _SavingsGoalCard extends StatelessWidget {
     );
   }
 }
-

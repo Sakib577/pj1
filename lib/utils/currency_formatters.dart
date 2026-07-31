@@ -1,6 +1,8 @@
 String formatCurrency(double value) {
+  final isNegative = value < 0;
+  final absoluteValue = value.abs();
   // Build comma-separated thousands manually so no extra intl package is needed.
-  final parts = value.toStringAsFixed(2).split('.');
+  final parts = absoluteValue.toStringAsFixed(2).split('.');
   final digits = parts.first;
   final reversed = digits.split('').reversed.toList();
   final buffer = StringBuffer();
@@ -11,7 +13,7 @@ String formatCurrency(double value) {
   }
 
   final formattedWhole = buffer.toString().split('').reversed.join();
-  return '\$${formattedWhole}.${parts.last}';
+  return '${isNegative ? '-' : ''}\$${formattedWhole}.${parts.last}';
 }
 
 String formatCurrencyNoCents(double value) {
@@ -19,4 +21,3 @@ String formatCurrencyNoCents(double value) {
   final formatted = formatCurrency(value);
   return formatted.endsWith('.00') ? formatted.substring(0, formatted.length - 3) : formatted;
 }
-

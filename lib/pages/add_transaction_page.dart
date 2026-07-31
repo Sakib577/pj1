@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../data/mock_data.dart';
+import '../state/finance_app_state.dart';
+import '../utils/currency_formatters.dart';
 
 class AddTransactionPage extends StatefulWidget {
   const AddTransactionPage({super.key});
@@ -10,48 +11,82 @@ class AddTransactionPage extends StatefulWidget {
 }
 
 class _AddTransactionPageState extends State<AddTransactionPage> {
-  // Local UI state for this form.
+  final TextEditingController _titleController = TextEditingController();
   bool _isIncome = false;
-  String _amount = '124.50';
-  int _categoryIndex = 0;
+  String _amountExpression = '0';
 
-  void _onDigitTap(String value) {
+  @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  void _onKeyTap(String value) {
     setState(() {
       if (value == 'back') {
-        // Delete one typed character.
-        if (_amount.isNotEmpty) {
-          _amount = _amount.substring(0, _amount.length - 1);
-          if (_amount.isEmpty) _amount = '0';
+        if (_amountExpression.length <= 1) {
+          _amountExpression = '0';
+        } else {
+          _amountExpression = _amountExpression.substring(0, _amountExpression.length - 1);
+          if (_amountExpression.isEmpty) {
+            _amountExpression = '0';
+          }
         }
         return;
       }
 
       if (value == '.') {
-        // Allow only one decimal point.
-        if (_amount.contains('.')) return;
-        _amount = '$_amount.';
+        if (_amountExpression.contains('.')) return;
+        _amountExpression = '$_amountExpression.';
         return;
       }
 
-      if (_amount == '0') {
-        // Replace default zero with first real digit.
-        _amount = value;
+      if (_amountExpression == '0') {
+        _amountExpression = value;
       } else {
-        _amount = '$_amount$value';
+        _amountExpression += value;
       }
     });
   }
 
+  double _calculateAmount() {
+    final normalized = _amountExpression.endsWith('.') ? _amountExpression.substring(0, _amountExpression.length - 1) : _amountExpression;
+    return double.tryParse(normalized) ?? 0;
+  }
+
   void _onSave() {
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Transaction saved'), behavior: SnackBarBehavior.floating),
+    final title = _titleController.text.trim();
+    final amount = _calculateAmount();
+
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a transaction title'), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+    if (amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid amount'), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+
+    FinanceAppScope.of(context).addTransaction(
+      title: title,
+      amount: amount,
+      icon: _isIncome ? Icons.trending_up : Icons.trending_down,
+      iconColor: _isIncome ? const Color(0xFF22C55E) : const Color(0xFFF97316),
+      isIncome: _isIncome,
     );
+
+    Navigator.of(context).pop(true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final displayAmount = _amount.isEmpty ? '0' : _amount;
+    final amount = _calculateAmount();
+    final displayAmount = formatCurrency(amount).substring(1);
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -64,12 +99,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Adjust spacing for shorter screens so content does not feel crowded.
             final compact = constraints.maxHeight < 720;
             final gap = compact ? 8.0 : 12.0;
             final keypadHeight = (constraints.maxHeight * 0.35).clamp(200.0, 300.0);
 
-            return Padding(
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -98,6 +133,19 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                     ),
                   ),
                   SizedBox(height: gap + 4),
+                  TextField(
+                    controller: _titleController,
+                    key: const ValueKey('transaction-title'),
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: 'Transaction title',
+                      hintText: 'Enter a clear name',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    ),
+                  ),
+                  SizedBox(height: gap + 4),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -116,57 +164,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                       ],
                     ),
                   ),
-                  SizedBox(height: gap + 2),
-                  const Text('Category', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                  SizedBox(height: gap - 2),
-                  SizedBox(
-                    height: 90,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                      itemCount: AppMockData.addTransactionCategories.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (context, index) {
-                        final item = AppMockData.addTransactionCategories[index];
-                        final selected = index == _categoryIndex;
-                        return InkWell(
-                          onTap: () => setState(() => _categoryIndex = index),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 58,
-                                height: 58,
-                                decoration: BoxDecoration(
-                                  color: selected ? item.color : Colors.white,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: selected ? item.color : const Color(0xFFE5E7EB), width: 1.2),
-                                ),
-                                child: Icon(item.icon, color: selected ? Colors.white : const Color(0xFF6B7280)),
-                              ),
-                              const SizedBox(height: 6),
-                              // Category label: when selected we show a dark/strong
-                              // foreground so the choice is clearly visible to the user.
-                              Text(
-                                item.label,
-                                style: TextStyle(
-                                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                                  color: selected ? const Color(0xFF0F172A) : const Color(0xFF6B7280),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
                   SizedBox(height: gap),
-                  const Spacer(),
-                  SizedBox(height: keypadHeight, child: _Keypad(onTap: _onDigitTap)),
+                  SizedBox(height: keypadHeight, child: _Keypad(onTap: _onKeyTap)),
                   SizedBox(height: gap),
                   SizedBox(
                     width: double.infinity,
+                    key: const ValueKey('save-transaction'),
                     child: ElevatedButton.icon(
                       onPressed: _onSave,
                       icon: const Icon(Icons.check_circle_outline),
@@ -191,6 +194,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
 class _SegmentButton extends StatelessWidget {
   const _SegmentButton({required this.label, required this.selected, required this.onTap});
+
   final String label;
   final bool selected;
   final VoidCallback onTap;
@@ -206,7 +210,12 @@ class _SegmentButton extends StatelessWidget {
           color: selected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Center(child: Text(label, style: TextStyle(fontWeight: FontWeight.w800, color: selected ? const Color(0xFFF59E0B) : const Color(0xFF6B7280)))),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(fontWeight: FontWeight.w800, color: selected ? const Color(0xFFF59E0B) : const Color(0xFF6B7280)),
+          ),
+        ),
       ),
     );
   }
@@ -214,29 +223,42 @@ class _SegmentButton extends StatelessWidget {
 
 class _Keypad extends StatelessWidget {
   const _Keypad({required this.onTap});
+
   final ValueChanged<String> onTap;
 
-  static const keys = ['7', '8', '9', '÷', '4', '5', '6', '×', '1', '2', '3', '-', 'back', '0', '.', '+'];
+  static const keys = ['7', '8', '9', 'back', '4', '5', '6', '.', '1', '2', '3', '0'];
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, childAspectRatio: 1.5),
-      itemCount: keys.length,
-      itemBuilder: (context, index) {
-        final key = keys[index];
-        return InkWell(
-          onTap: () => onTap(key),
-          child: Center(
-            child: key == 'back'
-                ? const Icon(Icons.backspace, color: Color(0xFFEF4444))
-                : Text(key, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+    const rows = [
+      ['7', '8', '9', 'back'],
+      ['4', '5', '6', '.'],
+      ['1', '2', '3', '0'],
+    ];
+
+    return Column(
+      children: [
+        for (final row in rows) ...[
+          Expanded(
+            child: Row(
+              children: [
+                for (final key in row)
+                  Expanded(
+                    child: InkWell(
+                      key: ValueKey('key-$key'),
+                      onTap: () => onTap(key),
+                      child: Center(
+                        child: key == 'back'
+                            ? const Icon(Icons.backspace, color: Color(0xFFEF4444))
+                            : Text(key, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        );
-      },
+        ],
+      ],
     );
   }
 }
-

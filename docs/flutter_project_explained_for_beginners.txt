@@ -8,12 +8,12 @@ You do not need previous app development experience.
 
 What this app currently does
 ----------------------------
-This project is an expense tracker UI demo.
+This project is an expense tracker app shell with live state and empty sections ready for real data.
 It currently includes:
 - Dashboard with balance, stats, categories, transactions, and planned payments.
 - Bottom tabs: Home, Budgets, Savings, Profile.
 - Add Transaction screen with keypad.
-- Demo/mock data (no database yet).
+- No seeded demo data.
 
 Important update
 ----------------
@@ -29,13 +29,13 @@ Main folders under `lib/`:
 - `lib/main.dart` -> app entry and theme setup only.
 - `lib/pages/` -> each screen/page widget.
 - `lib/models/` -> data model classes.
-- `lib/data/` -> demo/mock data constants.
+- `lib/data/` -> shared data helpers, if needed later.
 - `lib/utils/` -> helper functions (formatting, etc.).
 
 Think of it like this:
 - pages = what user sees
 - models = shape of the data
-- data = current sample values
+- data = app state and user input
 - utils = reusable helper logic
 
 
@@ -66,25 +66,25 @@ Key ideas:
   - `_StatsRow`
   - `_CategoriesRow`
   - `_TransactionTile`
-  - `_PlannedPaymentCard`
+  - `_EmptySectionCard`
+  - `_EmptyListCard`
 - FAB (+) opens `AddTransactionPage`.
-- `View All` in categories opens `CategoriesPage` and gets selection back.
+- `View All` in categories opens `CategoriesPage`.
 
 3) `lib/pages/categories_page.dart`
 -----------------------------------
-- Shows all categories in a list.
-- Tap one category -> returns selected name using `Navigator.pop(value)`.
+- Shows all categories in a list or an empty state when none exist.
 
 4) `lib/pages/add_transaction_page.dart`
 ----------------------------------------
 State variables:
 - `_isIncome` -> income/expense toggle.
-- `_amount` -> amount text typed via keypad.
-- `_categoryIndex` -> selected category.
+- `_amountExpression` -> amount typed via keypad.
+- `_titleController` -> transaction title input.
 
 Main methods:
-- `_onDigitTap(value)` handles keypad input rules.
-- `_onSave()` closes page and shows success SnackBar.
+- `_onKeyTap(value)` handles keypad input rules.
+- `_onSave()` validates input and stores the transaction in app state.
 
 Layout tips:
 - `LayoutBuilder` adapts spacing and keypad height for short/tall screens.
@@ -120,13 +120,7 @@ Contains data classes used by UI:
 
 These classes are plain containers (easy to read, no complex logic).
 
-9) `lib/data/mock_data.dart`
-----------------------------
-- Keeps all demo data in one place (`AppMockData`).
-- Pages read this data instead of hardcoding values directly.
-- Easy future step: replace this with API/database data.
-
-10) `lib/utils/currency_formatters.dart`
+9) `lib/utils/currency_formatters.dart`
 ----------------------------------------
 - `formatCurrency(double)` -> formats like `$4,250.80`.
 - `formatCurrencyNoCents(double)` -> removes `.00` when possible.
@@ -169,12 +163,11 @@ PART 5 - How to read this project as a beginner
 Recommended reading order:
 1. `lib/main.dart`
 2. `lib/pages/dashboard_page.dart`
-3. `lib/data/mock_data.dart`
-4. `lib/models/finance_models.dart`
-5. `lib/pages/add_transaction_page.dart`
-6. `lib/pages/budget_page.dart`
-7. `lib/pages/savings_page.dart`
-8. `lib/utils/currency_formatters.dart`
+3. `lib/models/finance_models.dart`
+4. `lib/pages/add_transaction_page.dart`
+5. `lib/pages/budget_page.dart`
+6. `lib/pages/savings_page.dart`
+7. `lib/utils/currency_formatters.dart`
 
 While reading, ask:
 - Where does this data come from?
@@ -185,10 +178,10 @@ While reading, ask:
 PART 6 - Demo vs real app (important)
 =====================================
 
-Currently demo:
-- No real save to storage.
-- No backend integration.
-- Several buttons are UI placeholders.
+Currently ready for real data:
+- State is in memory only.
+- No backend integration yet.
+- Some buttons still open empty-state actions.
 
 To make it production-ready later:
 - Add local DB/API.

@@ -27,7 +27,11 @@ class BudgetPage extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Create New Budget tapped'), behavior: SnackBarBehavior.floating),
+                  );
+                },
                 icon: const Icon(Icons.add_circle_outline),
                 label: const Text('Create New Budget'),
                 style: ElevatedButton.styleFrom(
@@ -41,13 +45,38 @@ class BudgetPage extends StatelessWidget {
             const SizedBox(height: 18),
             const _BudgetSectionHeader(title: 'Categories', trailing: 'View All'),
             const SizedBox(height: 12),
-            for (final b in budgets) ...[
-              _BudgetCategoryCard(item: b),
-              const SizedBox(height: 12),
-            ],
+            if (budgets.isEmpty)
+              const _BudgetEmptyState()
+            else
+              for (final b in budgets) ...[
+                _BudgetCategoryCard(item: b),
+                const SizedBox(height: 12),
+              ],
             const SizedBox(height: 12),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _BudgetEmptyState extends StatelessWidget {
+  const _BudgetEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      child: const Column(
+        children: [
+          Icon(Icons.account_balance_wallet_outlined, size: 34, color: Color(0xFFF59E0B)),
+          SizedBox(height: 10),
+          Text('No budgets yet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          SizedBox(height: 4),
+          Text('Create a budget to track category spending.', textAlign: TextAlign.center),
+        ],
       ),
     );
   }
@@ -66,7 +95,11 @@ class _BudgetSectionHeader extends StatelessWidget {
         Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
         if (trailing != null)
           TextButton(
-            onPressed: () {},
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('$trailing tapped'), behavior: SnackBarBehavior.floating),
+              );
+            },
             child: Text(trailing!, style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.w700)),
           ),
       ],
@@ -185,5 +218,3 @@ class _BudgetCategoryCard extends StatelessWidget {
     );
   }
 }
-
-

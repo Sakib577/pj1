@@ -3,9 +3,12 @@ Expense Tracker Flutter App - AI Handoff
 
 Purpose
 -------
-This is a Flutter expense tracker for Android and Web. It currently has a polished UI shell,
-email/password authentication, email verification, and Firestore access control. It is not yet
-persisting transactions to Firestore or to an encrypted local database.
+This is a Flutter expense tracker for Android and Web. It has a polished UI shell,
+email/password authentication, email verification, Firestore access control,
+per-user categories synced to Firestore, and transactions / planned payments /
+debts persisted to Firestore. Local Android notifications remind about upcoming
+planned payments (2 days before and on the due day). Budgets, savings goals, and
+shopping-list items are still kept only in memory.
 
 Technology
 ----------
@@ -22,87 +25,240 @@ Important files
 - lib/auth_gate.dart: routes signed-out users to AuthPage, unverified users to
   EmailVerificationPage, and verified users to DashboardPage.
 - lib/pages/auth_page.dart: email/password sign-up and sign-in.
-- lib/pages/email_verification_page.dart: resend verification email and refresh verification state.
-- lib/pages/dashboard_page.dart: home screen and bottom navigation.
-- lib/pages/categories_page.dart: expense/income category manager, subcategories, and user-defined emoji categories.
-- lib/pages/category_detail_page.dart: reusable parent-category/subcategory selector used by Add Transaction.
-- lib/state/finance_app_state.dart: current in-memory financial state. It is lost on app restart.
-- lib/models/finance_models.dart: UI-facing model classes. They contain Flutter IconData and Color,
-  so they should not be used directly as Firestore database models.
-- lib/pages/add_transaction_page.dart: transaction form; currently calls in-memory addTransaction.
-- lib/pages/profile_page.dart: displays the signed-in email and signs out.
-- lib/pages/settings_page.dart: lets the user refresh live rates and select a display currency.
-- lib/pages/finance_tools_page.dart: planned payments, debts, shopping-list, converter, and report tools.
-- lib/services/exchange_rate_service.dart: fetches USD exchange rates from ExchangeRate-API.
+- lib/pages/email_verification_page.dart: resend verification email and refresh
+  verification state.
+- lib/pages/dashboard_page.dart: home screen with bottom navigation (Home, Budgets,
+  Savings Goals, Profile) and the side drawer that opens the tools. On first load it
+  syncs user data (categories + persisted records) and then checks planned payments
+  that are due today or overdue, showing a "Payments due" dialog with Confirm &
+  record / Skip.
+- lib/pages/add_transaction_page.dart: transaction form with an Income/Expense
+  segment, recent category shortcuts, an optional note, a calculator keypad that
+  supports + - * / and = expressions, and a save button. It calls the in-memory
+  addTransaction.
+- lib/pages/categories_page.dart: expense/income category manager, subcategories,
+  and user-defined emoji categories. Also used in selection mode from Add
+  Transaction.
+- lib/pages/category_detail_page.dart: reusable parent-category/subcategory selector
+  used by Add Transaction.
+- lib/pages/budget_page.dart: Budgets tab UI (summary card, "Create New Budget"
+  button, per-category cards). Fed from in-memory budgets; empty until budgets exist.
+- lib/pages/savings_page.dart: Savings Goals tab UI (progress card, "Create New
+  Goal" button, filter). Fed from in-memory goals; empty until goals exist.
+- lib/pages/transactions_page.dart: "Recent Transactions" page with All / Income /
+  Expenses filter segments and the same tile theme as the dashboard list. Reachable
+  from the dashboard "View All" link.
+- lib/pages/planned_payments_page.dart: planned payments list plus the "New Planned
+  Payment" form. Payments pick an income/expense category (with subcategory), a
+  title, an amount, a repeat schedule (one time / daily / weekly / monthly / custom
+  every N days), and a start date. Stored in memory via FinanceAppState. Reachable
+  from the dashboard "View All" link and the drawer.
+- lib/pages/finance_tools_page.dart: currency converter and report tools only.
+  Planned payments, debts, and the shopping list moved to their own dedicated pages.
+- lib/pages/debts_page.dart: debts list with an Active / Closed toggle, each split
+  into Borrowed and Lent sections, plus the "New Debt" form (person, amount,
+  borrowed/lent, note). Active debts show a "Repaid" button next to the close
+  action; the close button is named "Forgive" for lent debts and "Close" for
+  borrowed ones. Repaid/closed debts show a status label (Repaid / Closed /
+  Forgiven) and a Reopen button. Stored in memory via FinanceAppState. Reachable
+  from the drawer.
+- lib/pages/shopping_list_page.dart: shopping list grouped by the Shopping category
+  subcategories (with a General group). The "Add Item" flow is chip-based: the Add
+  form shows subcategory chips (General + each subcategory) plus an "Add
+  subcategory" chip; tapping a subcategory opens an item-name dialog and adds the
+  item (General items use no subcategory). Checking an item prompts for its price
+  and records it as a Shopping expense transaction. Items and prices are stored in
+  memory via FinanceAppState. Reachable from the drawer.
+- lib/pages/profile_page.dart: profile card, balance/income/expenses stats, and sign
+  out. Also hosts the Select Currency entry point to SettingsPage.
+- lib/pages/settings_page.dart: select the default display currency (searchable
+  bottom-sheet picker) and refresh live rates.
+- lib/state/finance_app_state.dart: global financial state (transactions, debts,
+  shopping items, budgets, savings goals, categories cache, currency). Loads and
+  watches categories from Firestore for the signed-in user and loads persisted
+  transactions / planned payments / debts, then recomputes balance, income, and
+  expenses from those records. Every transaction / planned payment / debt mutation
+  is written through to Firestore (failures are swallowed so offline use never
+  blocks the UI). completeShoppingItem adds a Shopping expense transaction when an
+  item is checked off. Debts affect the balance: borrowing adds money and lending
+  subtracts it at creation; Repaid reverses that money movement; Close/Forgive never
+  moves money. confirmPlannedPayment records a due payment as a real transaction and
+  removes it (one-time) or advances its lastConfirmedDate (repeating). On load,
+  expense categories are normalized so the "Missing/Uncategorized" catch-all becomes
+  "Missing" and is kept first in the list. notifyListeners() defers via
+  addPostFrameCallback when the scheduler is mid-build to avoid Flutter's
+  InheritedElement '_dependents.isEmpty' assertion.
+- lib/services/category_repository.dart: reads/writes/seeds categories in Firestore
+  at users/{uid}/expense_categories and users/{uid}/income_categories and exposes a
+  live snapshot stream.
+- lib/services/finance_repository.dart: reads/writes transactions, planned
+  payments, and debts in Firestore at users/{uid}/transactions,
+  users/{uid}/planned_payments, and users/{uid}/debts.
+- lib/services/payment_reminder_service.dart: wraps flutter_local_notifications +
+  flutter_timezone + timezone to schedule Android reminders at 9 AM local time two
+  days before each planned payment's due date and on the due date itself. Reschedules
+  (cancel-all + re-add) on every app open or payment change.
+- lib/services/exchange_rate_service.dart: fetches USD exchange rates from
+  ExchangeRate-API.
+- lib/models/finance_models.dart: UI-facing model classes. They contain Flutter
+  IconData and Color, so they should not be used directly as Firestore database
+  models, but they do carry toMap/fromMap serialization (icons via a stable name
+  mapping, colors via ARGB ints) used by the finance repository. ExpenseCategory has
+  a toMap/fromMap for the Firestore category docs. PlannedPayment carries a repeat
+  schedule (RepeatFrequency once/daily/weekly/monthly/custom), a nextDue() helper,
+  a lastConfirmedDate used to skip already-confirmed occurrences, and a
+  needsConfirmation flag. DebtItem uses a DebtSettlement enum (active/closed/repaid)
+  so repaid vs forgiven/closed records stay distinct, and ShoppingItem (subcategory,
+  done flag, price) are simple in-memory models.
 - lib/utils/currency_settings.dart: current display currency and loaded rates.
+- lib/utils/currency_formatters.dart: formatCurrency / formatCurrencyNoCents /
+  formatCurrencyInput helpers (display currency with manual thousands grouping).
+- lib/widgets/: shared UI building blocks (TransactionTile, EmptyStateCard,
+  PlannedPaymentCard) reused by the dashboard and the transactions / planned
+  payments pages. EmptyStateCard renders content-sized and top-left aligned: it
+  wraps its card in Align(topLeft) + UnconstrainedBox(constrainedAxis:
+  Axis.horizontal) so the inner Row never stretches vertically (Flex fills a
+  bounded cross axis).
+- lib/data/: currently an empty directory, reserved for future repository/database
+  code.
 - firestore.rules: deployed Firestore rules.
 - firebase.json: Firebase CLI configuration and the Firestore rules reference.
 - lib/firebase_options.dart: generated Firebase configuration. Do not edit manually.
+- test/widget_test.dart: single widget test. Currently OUTDATED and failing; it
+  references keys (transaction-title, key-2, key-5, key-., key-0) that no longer
+  exist on the calculator-keypad Add Transaction page.
 
 Authentication and security
 ---------------------------
 - Email/Password Authentication is enabled in Firebase Console.
 - On account creation, the app sends a verification email.
-- Users cannot open the dashboard until they verify their email and tap "I verified my email".
-- Firestore rules are deployed. They allow only verified users to access their own path:
-  users/{uid}/... . All other Firestore paths are denied.
+- Users cannot open the dashboard until they verify their email and tap "I verified
+  my email".
+- Firestore rules are deployed. They allow only verified users to access their own
+  path: users/{uid}/... . All other Firestore paths are denied.
 - If rules change, deploy them with:
   firebase deploy --only firestore:rules --project expense-tracker-sakib
 
 Current behavior
 ----------------
-- A verified user can sign in, view the empty dashboard, add an in-memory transaction, and sign out.
-- The side drawer includes planned payments, debts, shopping list, currency conversion, report copy,
-  profile/settings, budgets, savings, categories, and sign out.
-- Currency settings loads the provider's supported ISO currencies at runtime. All amount formatting uses
-  the selected display currency. Financial totals are held internally in USD and newly entered amounts
-  are converted to USD using the currently loaded rate.
-- The planned-payment, debt, and shopping-list pages currently store their added items in page memory;
-  they disappear when the page/app is closed.
-- The Categories drawer entry has Expense and Income tabs, matching the Add Transaction type selector.
-  Both kinds have built-in parent categories and useful subcategories. Income includes salary/wages,
-  dues received, interest, dividends, loan repayments, rental income, sales, gifts, refunds,
-  freelance/side work, and other income.
-- Users can create categories with an emoji and add subcategories to any category. Categories are also
-  currently in memory only.
-- Built-in categories use orange Material icons; emojis are reserved for user-defined categories. The
-  Add Transaction page shows three recent categories (tracked separately for income and expenses) plus
-  a More shortcut. Tapping a category opens a reusable general/subcategory selection page. A category
-  is required by default; the text field is an optional note. Transactions currently record the selected
-  category/subcategory name for later analytics.
-- User-defined categories and user-added subcategories can be deleted. Their affected in-memory
-  transactions are reassigned to Other. Income has its own categories: salary/wages, dues received,
-  interest, dividends, loan repayments, rental income, sales, gifts, refunds, freelance/side work,
-  and other income.
-- The report feature currently copies a plain-text report to the clipboard. Add a real CSV/PDF download
-  once report records are persisted.
-- Transactions disappear on restart and are not shared between devices yet.
-- Budgets, savings goals, categories, and planned payments are UI placeholders.
+- A verified user can sign in, view the dashboard, add an in-memory transaction, and
+  sign out.
+- The dashboard has four bottom tabs (Home, Budgets, Savings Goals, Profile) plus a
+  side drawer with Dashboard, Categories, Planned Payments, Debts, Shopping List,
+  Budgets, Savings Goals, Profile & Settings, Currency Converter, and Export Report.
+  The "View All" links on Recent Transactions and Planned Payments open dedicated
+  pages. Several buttons (notifications, more options) only show placeholder
+  snackbars.
+- The Recent Transactions page lists all transactions with All / Income / Expenses
+  filter segments; the dashboard shows the five most recent.
+- Planned payments have a dedicated list page and creation form. Each payment is
+  based on an income/expense category (with an optional subcategory), has an amount,
+  and repeats one time, daily, weekly, monthly, or custom (every N days) starting
+  from a chosen date. Cards show the repeat badge and the next due date (overdue /
+  due today). Payments can be deleted. On app open the dashboard checks for payments
+  due today or overdue and shows a "Payments due" dialog; "Confirm & record" turns
+  each into a real transaction (updates balance, income/expense stats, and Recent
+  Transactions), removes one-time payments, and advances repeating ones. Payments
+  persist to Firestore.
+- Debts have a dedicated page with an Active / Closed toggle; each view is split into
+  Borrowed and Lent sections. A debt stores a person, an amount, a type
+  (borrowed/lent), and an optional note. Adding a debt moves the balance (borrowed
+  adds money, lent takes it out); the Repaid action reverses that money movement,
+  while Close/Forgive settles the record without touching the balance. Repaid,
+  closed, and forgiven debts show in the Closed tab with a status label and a Reopen
+  button. Debts persist to Firestore.
+- The Shopping List page groups items by the Shopping category's subcategories (with
+  a General group). The Add Item flow is chip-based: the Add form shows subcategory
+  chips plus an "Add subcategory" chip; tapping a subcategory opens an item-name
+  dialog and adds the item (General items get no subcategory). Subcategories persist
+  to Firestore via the existing category sync. Checking off an item prompts for its
+  price and automatically adds a Shopping expense transaction. Items are stored in
+  memory only.
+- Categories ARE now persisted per user. On first dashboard load the app seeds the
+  default categories into Firestore (users/{uid}/expense_categories and
+  income_categories), loads them, and subscribes to live snapshots. User-defined
+  emoji categories, subcategories, and deletions sync to Firestore. The add/delete
+  flows are triggered from finance_app_state.dart.
+- The Categories page has Expense and Income tabs matching the Add Transaction type
+  selector. Both kinds have built-in parent categories and useful subcategories.
+  The expense catch-all is "Missing" (a legacy "Missing/Uncategorized" name is
+  normalized to "Missing" on load and kept first in the list); deleted categories
+  move their transactions to it.
+  Income includes salary/wages, dues received, interest, dividends, loan
+  repayments, rental income, sales, gifts, refunds, freelance/side work, and other
+  income.
+- Built-in categories use orange Material icons; emojis are reserved for
+  user-defined categories. The Add Transaction page shows horizontal category
+  shortcuts (recently used tracked separately for income and expenses, plus a "Add
+  category" shortcut). Tapping a category opens the reusable category/subcategory
+  selector. A category is required by default; the text field is an optional note.
+  Transactions currently record the selected category/subcategory name for later
+  analytics.
+- User-defined categories and user-added subcategories can be deleted. Their
+  affected in-memory transactions are reassigned to Other.
+- Currency settings loads the provider's supported ISO currencies at runtime. All
+  amount formatting uses the selected display currency. Financial totals are held
+  internally in USD and newly entered amounts are converted to USD using the
+  currently loaded rate.
+- Transactions, planned payments, and debts are persisted to Firestore under
+  users/{uid}/transactions, users/{uid}/planned_payments, and users/{uid}/debts.
+  Balance, income, and expenses are recomputed from those records on every load, so
+  the dashboard survives app restarts and syncs across devices. Shopping-list items,
+  budgets, and savings goals are still in-memory only; they disappear when the
+  app/page is closed.
+- Android local notifications remind about planned payments: a "Payment coming up"
+  notification 2 days before the due date and a "Due today" notification on the due
+  date, both at 9 AM device-local time. Reminders are (re)scheduled on every app
+  open and whenever payments change. Android core library desugaring is enabled in
+  android/app/build.gradle.kts (required by flutter_local_notifications), the
+  manifest declares RECEIVE_BOOT_COMPLETED plus the plugin's scheduled-notification
+  receivers, and a white notification_icon drawable is provided. The
+  POST_NOTIFICATIONS runtime prompt is requested on Android 13+ via
+  PaymentReminderService.
+- The Budgets and Savings Goals tabs are UI shells with empty states and placeholder
+  buttons; they do not create or store any data yet.
+- The report feature copies a plain-text report to the clipboard. Add a real
+  CSV/PDF download once report records are persisted.
 
 Recommended next work
 ---------------------
-1. Implement a serializable Transaction model separate from TransactionItem.
-   Store money as integer cents, not double. Include ID, title, amountCents, type, categoryId,
-   createdAt, updatedAt, and sync status.
-2. Add a repository that reads/writes transactions at:
-   users/{currentUser.uid}/transactions/{transactionId}
-   Use Firestore snapshots to render the dashboard.
-3. Add encrypted offline storage for Android/iOS/macOS (for example Drift + SQLCipher) and keep
-   the encryption key in flutter_secure_storage. Firestore offline cache alone is not a complete
-   app-controlled encrypted local database.
-4. Design conflict handling and an offline sync queue before treating the local database as the
-   primary source of truth.
-5. Add categories, budgets, savings goals, planned payments, edit/delete transactions, and tests.
-6. Add password reset, resend-email cooldown, account deletion, error telemetry, and App Check
-   before production release.
+1. Refactor TransactionItem into a serializable Transaction model stored as integer
+   cents (not double) with a categoryId reference, updatedAt, and sync status.
+   Currently amounts are stored as USD doubles and the display subtitle is
+   persisted as-is, which is lossy for editing/analytics.
+2. Move transaction reads to a Firestore snapshot stream instead of a one-time load
+   so the dashboard stays live across devices (planned payments and debts could
+   follow the same pattern).
+3. Add encrypted offline storage for Android/iOS/macOS (for example Drift +
+   SQLCipher) and keep the encryption key in flutter_secure_storage. Firestore
+   offline cache alone is not a complete app-controlled encrypted local database.
+4. Design conflict handling and an offline sync queue before treating the local
+   database as the primary source of truth. Firestore writes currently swallow
+   failures silently, so offline edits are lost on restart.
+5. Persist shopping-list items, budgets, and savings goals, and add edit/delete
+   transactions. Notifications currently rely on the app being opened to
+   reschedule; consider an on-device scheduler/periodic task.
+6. Fix test/widget_test.dart so it matches the new Add Transaction calculator-keypad
+   flow (it currently fails because it taps old keys that no longer exist).
+7. Add password reset, resend-email cooldown, account deletion, error telemetry, and
+   App Check before production release.
 
 Development notes
 -----------------
 - Run web: flutter run -d chrome
-- Test: flutter test
-- Flutter analyze currently reports 11 pre-existing style/unused-code warnings outside the Firebase
-  authentication work.
-- Firebase email-link sign-in is NOT enabled. It is separate from email verification. On the Spark
-  plan, email-link sign-in email delivery has a small quota; use verification links for now.
-- The open ExchangeRate-API endpoint updates daily and requires attribution. The Settings and converter
-  pages include this attribution. Cache rates locally before production use to avoid unnecessary calls.
+- Run Android: flutter run -d <device-id>
+- Build debug APK: flutter build apk --debug
+- Test: flutter test  (currently FAILING; see item 6 above)
+- Flutter analyze: reports no issues (clean).
+- Android build.gradle.kts enables core library desugaring
+  (coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4') because
+  flutter_local_notifications requires it. Keep the desugar library in sync with
+  the AGP version if either is upgraded.
+- Firebase email-link sign-in is NOT enabled. It is separate from email
+  verification. On the Spark plan, email-link sign-in email delivery has a small
+  quota; use verification links for now.
+- The open ExchangeRate-API endpoint updates daily and requires attribution. The
+  Settings and converter pages include this attribution. Cache rates locally before
+  production use to avoid unnecessary calls.
+
+(End of file - total 108 lines)

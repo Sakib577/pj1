@@ -6,11 +6,18 @@ import 'package:pj1/models/finance_models.dart';
 import 'package:pj1/pages/add_transaction_page.dart';
 import 'package:pj1/pages/budget_page.dart';
 import 'package:pj1/pages/categories_page.dart';
+import 'package:pj1/pages/debts_page.dart';
 import 'package:pj1/pages/finance_tools_page.dart';
+import 'package:pj1/pages/planned_payments_page.dart';
 import 'package:pj1/pages/profile_page.dart';
 import 'package:pj1/pages/savings_page.dart';
+import 'package:pj1/pages/shopping_list_page.dart';
+import 'package:pj1/pages/transactions_page.dart';
 import 'package:pj1/state/finance_app_state.dart';
 import 'package:pj1/utils/currency_formatters.dart';
+import 'package:pj1/widgets/empty_state_card.dart';
+import 'package:pj1/widgets/planned_payment_card.dart';
+import 'package:pj1/widgets/transaction_tile.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -23,6 +30,7 @@ class _DashboardPageState extends State<DashboardPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   late FinanceAppState _appState;
   bool _categoriesSynced = false;
+  bool _dueCheckDone = false;
 
   // Controls which bottom-tab page is currently visible.
   int _navIndex = 0;
@@ -33,8 +41,84 @@ class _DashboardPageState extends State<DashboardPage> {
     _appState = FinanceAppScope.of(context);
     if (!_categoriesSynced) {
       _categoriesSynced = true;
-      _appState.syncCategoriesForCurrentUser();
+      _initUserData();
     }
+  }
+
+  Future<void> _initUserData() async {
+    await _appState.syncUserData();
+    if (!mounted) return;
+    await _checkDuePayments();
+  }
+
+  // Prompts once per session for planned payments whose occurrence is due
+  // today or overdue. Confirming records them as real transactions.
+  Future<void> _checkDuePayments() async {
+    if (_dueCheckDone || !mounted) return;
+    _dueCheckDone = true;
+    final due = _appState.plannedPayments
+        .where((payment) => payment.needsConfirmation)
+        .toList();
+    if (due.isEmpty) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Payments due'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: due.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (_, index) {
+              final payment = due[index];
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(payment.icon, color: payment.iconColor),
+                title: Text(
+                  payment.title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(payment.categoryName),
+                trailing: Text(
+                  '${payment.isIncome ? '+' : '-'}'
+                  '${formatCurrency(payment.amount)}',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Skip'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Confirm & record'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    for (final payment in due) {
+      _appState.confirmPlannedPayment(payment.id);
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          due.length == 1
+              ? 'Payment recorded as '
+                    '${due.first.isIncome ? 'income' : 'expense'}'
+              : '${due.length} payments recorded',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -70,6 +154,24 @@ class _DashboardPageState extends State<DashboardPage> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => FinanceToolsPage(tool: tool)));
+  }
+
+  void _openPlannedPayments() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PlannedPaymentsPage()));
+  }
+
+  void _openDebts() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const DebtsPage()));
+  }
+
+  void _openShoppingList() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ShoppingListPage()));
   }
 
   Future<void> _openFromDrawer(VoidCallback action) async {
@@ -174,47 +276,57 @@ class _DashboardPageState extends State<DashboardPage> {
                   title: 'Recent Transactions',
                   trailing: 'View All',
                   onTrailingPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Showing all transactions'),
-                        behavior: SnackBarBehavior.floating,
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const TransactionsPage(),
                       ),
                     );
                   },
                 ),
                 const SizedBox(height: 12),
                 if (transactions.isEmpty)
-                  const _EmptyListCard(
+                  const EmptyStateCard(
                     title: 'No transactions yet',
                     subtitle: 'Add your first transaction to start tracking.',
                     icon: Icons.receipt_long,
                   )
                 else
-                  ...transactions.map(
-                    (item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _TransactionTile(item: item),
-                    ),
-                  ),
+                  ...transactions
+                      .take(5)
+                      .map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: TransactionTile(item: item),
+                        ),
+                      ),
                 const SizedBox(height: 12),
                 _SectionHeader(
                   title: 'Planned Payments',
                   trailing: 'View All',
                   onTrailingPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Planned payments opened'),
-                        behavior: SnackBarBehavior.floating,
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PlannedPaymentsPage(),
                       ),
                     );
                   },
                 ),
                 const SizedBox(height: 12),
-                const _EmptyListCard(
-                  title: 'No planned payments yet',
-                  subtitle: 'Schedule upcoming bills once you create them.',
-                  icon: Icons.event_note_outlined,
-                ),
+                if (appState.plannedPayments.isEmpty)
+                  const EmptyStateCard(
+                    title: 'No planned payments yet',
+                    subtitle: 'Schedule upcoming bills once you create them.',
+                    icon: Icons.event_note_outlined,
+                  )
+                else
+                  ...appState.plannedPayments
+                      .take(3)
+                      .map(
+                        (payment) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: PlannedPaymentCard(payment: payment),
+                        ),
+                      ),
                 const SizedBox(height: 24),
               ],
             ),
@@ -257,6 +369,15 @@ class _DashboardPageState extends State<DashboardPage> {
         onOpenCategories: () {
           _openFromDrawer(() => _openCategories());
         },
+        onOpenPlannedPayments: () {
+          _openFromDrawer(_openPlannedPayments);
+        },
+        onOpenDebts: () {
+          _openFromDrawer(_openDebts);
+        },
+        onOpenShoppingList: () {
+          _openFromDrawer(_openShoppingList);
+        },
         onOpenTool: (tool) {
           _openFromDrawer(() => _openTool(tool));
         },
@@ -275,12 +396,18 @@ class _AppDrawer extends StatelessWidget {
     required this.selectedIndex,
     required this.onNavigate,
     required this.onOpenCategories,
+    required this.onOpenPlannedPayments,
+    required this.onOpenDebts,
+    required this.onOpenShoppingList,
     required this.onOpenTool,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onNavigate;
   final VoidCallback onOpenCategories;
+  final VoidCallback onOpenPlannedPayments;
+  final VoidCallback onOpenDebts;
+  final VoidCallback onOpenShoppingList;
   final ValueChanged<FinanceTool> onOpenTool;
 
   @override
@@ -367,19 +494,19 @@ class _AppDrawer extends StatelessWidget {
               icon: Icons.event_note_outlined,
               label: 'Planned Payments',
               selected: false,
-              onTap: () => onOpenTool(FinanceTool.plannedPayments),
+              onTap: onOpenPlannedPayments,
             ),
             _DrawerNavigationItem(
               icon: Icons.handshake_outlined,
               label: 'Debts',
               selected: false,
-              onTap: () => onOpenTool(FinanceTool.debts),
+              onTap: onOpenDebts,
             ),
             _DrawerNavigationItem(
               icon: Icons.shopping_cart_outlined,
               label: 'Shopping List',
               selected: false,
-              onTap: () => onOpenTool(FinanceTool.shoppingList),
+              onTap: onOpenShoppingList,
             ),
             _DrawerNavigationItem(
               icon: Icons.pie_chart_outline_rounded,
@@ -604,60 +731,6 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _EmptyListCard extends StatelessWidget {
-  const _EmptyListCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF4E8),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: const Color(0xFFF59E0B)),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: const TextStyle(color: Color(0xFF6B7280)),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
     required this.title,
@@ -689,61 +762,6 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _TransactionTile extends StatelessWidget {
-  const _TransactionTile({required this.item});
-  final TransactionItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: item.iconColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(item.icon, color: item.iconColor),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Text(
-                  item.subtitle,
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            '${item.negative ? '-' : ''}${formatCurrency(item.amount)}',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-        ],
-      ),
     );
   }
 }

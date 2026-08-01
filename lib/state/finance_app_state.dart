@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/finance_models.dart';
 import '../services/category_repository.dart';
 import '../services/exchange_rate_service.dart';
+import '../services/finance_repository.dart';
+import '../services/payment_reminder_service.dart';
 import '../utils/currency_settings.dart';
 
 class FinanceAppState extends ChangeNotifier {
@@ -19,7 +22,10 @@ class FinanceAppState extends ChangeNotifier {
   final List<String> _recentCategoryIds = [];
   final List<String> _recentIncomeCategoryIds = [];
   final CategoryRepository _categoryRepository = CategoryRepository();
+  final FinanceRepository _financeRepository = FinanceRepository();
   final List<PlannedPayment> _plannedPayments = [];
+  final List<DebtItem> _debts = [];
+  final List<ShoppingItem> _shoppingItems = [];
   final List<BudgetCategory> _budgets = [];
   final List<SavingsGoal> _goals = [];
   final ExchangeRateService _exchangeRateService = ExchangeRateService();
@@ -30,6 +36,26 @@ class FinanceAppState extends ChangeNotifier {
   bool _categorySyncReady = false;
   StreamSubscription<List<ExpenseCategory>>? _expenseCategorySubscription;
   StreamSubscription<List<ExpenseCategory>>? _incomeCategorySubscription;
+  bool _notifyScheduled = false;
+
+  // FinanceAppScope is an InheritedNotifier and every page depends on it, so a
+  // notifyListeners() during the framework's build/layout phase (e.g. an async
+  // Firestore write completing mid route transition) can trip Flutter's
+  // InheritedElement '_dependents.isEmpty' assertion. Defer those notifications
+  // to just after the frame so dependents are never rebuilt mid-build.
+  @override
+  void notifyListeners() {
+    if (WidgetsBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+      super.notifyListeners();
+      return;
+    }
+    if (_notifyScheduled) return;
+    _notifyScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _notifyScheduled = false;
+      super.notifyListeners();
+    });
+  }
 
   BalanceSummary get balanceSummary => BalanceSummary(
     total: _balance,
@@ -84,6 +110,212 @@ class FinanceAppState extends ChangeNotifier {
 
   List<PlannedPayment> get plannedPayments =>
       List.unmodifiable(_plannedPayments);
+
+  void addPlannedPayment(PlannedPayment payment) {
+    _plannedPayments.insert(0, payment);
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.savePlannedPayment(uid, payment)));
+    _syncReminders();
+  }
+
+  void removePlannedPayment(String id) {
+    _plannedPayments.removeWhere((payment) => payment.id == id);
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.deletePlannedPayment(uid, id)));
+    _syncReminders();
+  }
+
+  // Confirms a due planned payment: records it as a real transaction, then
+  // removes one-time payments or advances repeating ones past the confirmed
+  // occurrence so they are not prompted again.
+  void confirmPlannedPayment(String id) {
+    final index = _plannedPayments.indexWhere((payment) => payment.id == id);
+    if (index == -1) return;
+    final payment = _plannedPayments[index];
+    if (!payment.needsConfirmation) return;
+
+    _recordTransaction(
+      amountUsd: payment.amount,
+      icon: payment.icon,
+      iconColor: payment.iconColor,
+      isIncome: payment.isIncome,
+      category: _findCategoryForPayment(payment),
+      subcategory: payment.subcategory,
+      note: payment.title,
+    );
+
+    if (payment.repeat == RepeatFrequency.once) {
+      _plannedPayments.removeAt(index);
+      notifyListeners();
+      unawaited(_write(
+        (uid) => _financeRepository.deletePlannedPayment(uid, payment.id),
+      ));
+    } else {
+      _plannedPayments[index] = payment.copyWith(
+        lastConfirmedDate: DateTime.now(),
+      );
+      notifyListeners();
+      final updated = _plannedPayments[index];
+      unawaited(_write(
+        (uid) => _financeRepository.savePlannedPayment(uid, updated),
+      ));
+    }
+    _syncReminders();
+  }
+
+  ExpenseCategory _findCategoryForPayment(PlannedPayment payment) {
+    final categories = payment.isIncome ? _incomeCategories : _expenseCategories;
+    for (final category in categories) {
+      if (category.name == payment.categoryName) return category;
+    }
+    return ExpenseCategory(
+      id: payment.isIncome ? 'planned-income' : 'planned-expense',
+      name: payment.categoryName.isEmpty
+          ? (payment.isIncome ? 'Income' : 'Expense')
+          : payment.categoryName,
+      icon: payment.icon,
+      subcategories: const [],
+    );
+  }
+
+  List<DebtItem> get debts => List.unmodifiable(_debts);
+
+  void addDebt(DebtItem debt) {
+    _debts.insert(0, debt);
+    // Borrowing brings money in; lending puts money out.
+    _adjustDebtBalance(debt.amount, debt.type, 1);
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.saveDebt(uid, debt)));
+  }
+
+  void setDebtClosed(String id, bool isClosed) {
+    final index = _debts.indexWhere((debt) => debt.id == id);
+    if (index == -1) return;
+    final debt = _debts[index];
+    if (isClosed) {
+      // Closing/forgiving settles the record without moving money.
+      _debts[index] = debt.copyWith(settlement: DebtSettlement.closed);
+    } else {
+      _debts[index] = debt.copyWith(settlement: DebtSettlement.active);
+      if (debt.settlement == DebtSettlement.repaid) {
+        // Reopening a repaid debt undoes the repayment money movement.
+        _adjustDebtBalance(debt.amount, debt.type, 1);
+      }
+    }
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.saveDebt(uid, _debts[index])));
+  }
+
+  void markDebtRepaid(String id) {
+    final index = _debts.indexWhere((debt) => debt.id == id);
+    if (index == -1) return;
+    final debt = _debts[index];
+    if (debt.settlement != DebtSettlement.active) return;
+    // Repaying reverses the original money movement: borrowed pays back out,
+    // lent money comes back in.
+    _adjustDebtBalance(debt.amount, debt.type, -1);
+    _debts[index] = debt.copyWith(settlement: DebtSettlement.repaid);
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.saveDebt(uid, _debts[index])));
+  }
+
+  void deleteDebt(String id) {
+    final index = _debts.indexWhere((debt) => debt.id == id);
+    if (index == -1) return;
+    final debt = _debts[index];
+    _debts.removeAt(index);
+    if (debt.settlement != DebtSettlement.repaid) {
+      // Repaid debts have zero net balance effect, so nothing to undo.
+      _adjustDebtBalance(debt.amount, debt.type, -1);
+    }
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.deleteDebt(uid, id)));
+  }
+
+  // Re-schedules Android reminders to match the current planned payments.
+  void _syncReminders() {
+    unawaited(
+      PaymentReminderService.instance.scheduleReminders(_plannedPayments),
+    );
+  }
+
+  // Runs a Firestore write for the signed-in user, ignoring failures so a
+  // slow network never blocks the UI.
+  Future<void> _write(
+    Future<void> Function(String uid) operation,
+  ) async {
+    final uid = _syncedUid ?? FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+    try {
+      await operation(uid);
+    } catch (_) {}
+  }
+
+  // sign 1 = borrowed adds money / lent takes money out (creation).
+  // sign -1 = borrowed pays back out / lent money comes back in (repayment).
+  void _adjustDebtBalance(double amount, DebtType type, int sign) {
+    _balance += sign * (type == DebtType.borrowed ? amount : -amount);
+  }
+
+  List<ShoppingItem> get shoppingItems => List.unmodifiable(_shoppingItems);
+
+  List<String> get shoppingSubcategories {
+    for (final category in _expenseCategories) {
+      if (category.id == 'shopping') {
+        return List.unmodifiable(category.subcategories);
+      }
+    }
+    return const [];
+  }
+
+  void addShoppingItem(ShoppingItem item) {
+    _shoppingItems.insert(0, item);
+    notifyListeners();
+  }
+
+  void deleteShoppingItem(String id) {
+    _shoppingItems.removeWhere((item) => item.id == id);
+    notifyListeners();
+  }
+
+  // Marks an item done and records the price as a Shopping expense transaction.
+  Future<void> completeShoppingItem({
+    required String id,
+    required double price,
+    required String subcategory,
+  }) async {
+    final index = _shoppingItems.indexWhere((item) => item.id == id);
+    if (index == -1) return;
+    final item = _shoppingItems[index];
+    if (item.isDone) return;
+
+    _shoppingItems[index] = item.copyWith(
+      isDone: true,
+      price: CurrencySettings.toUsd(price.abs()),
+      completedAt: DateTime.now(),
+    );
+
+    ExpenseCategory? shoppingCategory;
+    for (final category in _expenseCategories) {
+      if (category.id == 'shopping') {
+        shoppingCategory = category;
+        break;
+      }
+    }
+    if (shoppingCategory != null) {
+      addTransaction(
+        amount: price.abs(),
+        icon: shoppingCategory.icon ?? Icons.shopping_bag_rounded,
+        iconColor: const Color(0xFFF97316),
+        isIncome: false,
+        category: shoppingCategory,
+        subcategory: subcategory.isEmpty ? null : subcategory,
+        note: item.name,
+      );
+    } else {
+      notifyListeners();
+    }
+  }
   List<BudgetCategory> get budgets => List.unmodifiable(_budgets);
   SavingsOverview get savingsOverview => const SavingsOverview(
     totalSavings: 0,
@@ -100,10 +332,11 @@ class FinanceAppState extends ChangeNotifier {
   DateTime? get ratesUpdatedAt => _ratesUpdatedAt;
   bool get ratesLoading => _ratesLoading;
 
-  Future<void> syncCategoriesForCurrentUser() async {
+  Future<void> syncUserData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       _stopCategorySync();
+      _clearFinanceData();
       _categorySyncReady = true;
       notifyListeners();
       return;
@@ -116,7 +349,7 @@ class FinanceAppState extends ChangeNotifier {
     _stopCategorySync();
     _syncedUid = user.uid;
 
-    _initialLoad = _loadCategoriesForUser(user.uid);
+    _initialLoad = _loadUserDataForUser(user.uid);
     await _initialLoad;
   }
 
@@ -133,6 +366,71 @@ class FinanceAppState extends ChangeNotifier {
     _initialLoad = null;
     _categorySyncReady = false;
   }
+
+  Future<void> _loadUserDataForUser(String uid) async {
+    await _loadCategoriesForUser(uid);
+
+    try {
+      final transactions = await _financeRepository.loadTransactions(uid);
+      _transactions
+        ..clear()
+        ..addAll(transactions)
+        ..sort((a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)));
+    } catch (_) {}
+
+    try {
+      final payments = await _financeRepository.loadPlannedPayments(uid);
+      _plannedPayments
+        ..clear()
+        ..addAll(payments)
+        ..sort((a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)));
+    } catch (_) {}
+
+    try {
+      final debts = await _financeRepository.loadDebts(uid);
+      _debts
+        ..clear()
+        ..addAll(debts)
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    } catch (_) {}
+
+    _recomputeTotals();
+    _syncReminders();
+    notifyListeners();
+  }
+
+  // Balance is derived from transactions plus the net effect of active or
+  // closed debts, so it can be rebuilt from persisted records after a restart.
+  void _recomputeTotals() {
+    var income = 0.0;
+    var expenses = 0.0;
+    for (final transaction in _transactions) {
+      if (transaction.negative) {
+        expenses += transaction.amount;
+      } else {
+        income += transaction.amount;
+      }
+    }
+    var debtContribution = 0.0;
+    for (final debt in _debts) {
+      if (debt.settlement == DebtSettlement.repaid) continue;
+      debtContribution +=
+          debt.type == DebtType.borrowed ? debt.amount : -debt.amount;
+    }
+    _income = income;
+    _expenses = expenses;
+    _balance = income - expenses + debtContribution;
+  }
+
+  void _clearFinanceData() {
+    _transactions.clear();
+    _plannedPayments.clear();
+    _debts.clear();
+    _recomputeTotals();
+  }
+
+  DateTime _sortTime(DateTime? date) =>
+      date ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   Future<void> _loadCategoriesForUser(String uid) async {
     try {
@@ -177,6 +475,24 @@ class FinanceAppState extends ChangeNotifier {
     target
       ..clear()
       ..addAll(source);
+    if (identical(target, _expenseCategories)) {
+      _normalizeMissingCategory(target);
+    }
+  }
+
+  // Renames the legacy "Missing/Uncategorized" catch-all to "Missing" and keeps
+  // that category first in the list.
+  void _normalizeMissingCategory(List<ExpenseCategory> categories) {
+    for (var i = 0; i < categories.length; i++) {
+      if (categories[i].name.trim() == 'Missing/Uncategorized') {
+        categories[i] = categories[i].copyWith(name: 'Missing');
+      }
+    }
+    final index = categories.indexWhere((category) =>
+        category.name.trim() == 'Missing');
+    if (index > 0) {
+      categories.insert(0, categories.removeAt(index));
+    }
   }
 
   Future<void> refreshExchangeRates() async {
@@ -216,8 +532,8 @@ class FinanceAppState extends ChangeNotifier {
       sortOrder: categories.length,
     );
     categories.add(category);
-    await _persistCategory(category: category, isIncome: isIncome);
     notifyListeners();
+    await _persistCategory(category: category, isIncome: isIncome);
   }
 
   Future<void> addSubcategory({
@@ -231,8 +547,8 @@ class FinanceAppState extends ChangeNotifier {
         if (!category.subcategories.contains(name)) {
           category.subcategories.add(name);
           category.userDefinedSubcategories.add(name);
-          await _persistCategory(category: category, isIncome: isIncome);
           notifyListeners();
+          await _persistCategory(category: category, isIncome: isIncome);
         }
         return;
       }
@@ -246,7 +562,8 @@ class FinanceAppState extends ChangeNotifier {
     if (!category.isUserDefined) return;
     final categories = isIncome ? _incomeCategories : _expenseCategories;
     categories.remove(category);
-    _moveTransactionsToOther(category.name);
+    _moveTransactionsToMissing(category.name);
+    notifyListeners();
     final uid = _syncedUid ?? FirebaseAuth.instance.currentUser?.uid;
     if (uid != null && uid.isNotEmpty) {
       await _categoryRepository.deleteCategory(
@@ -255,7 +572,6 @@ class FinanceAppState extends ChangeNotifier {
         categoryId: category.id,
       );
     }
-    notifyListeners();
   }
 
   Future<void> deleteSubcategory({
@@ -265,19 +581,19 @@ class FinanceAppState extends ChangeNotifier {
   }) async {
     if (!category.userDefinedSubcategories.remove(subcategory)) return;
     category.subcategories.remove(subcategory);
-    _moveTransactionsToOther('${category.name} · $subcategory');
-    await _persistCategory(category: category, isIncome: isIncome);
+    _moveTransactionsToMissing('${category.name} · $subcategory');
     notifyListeners();
+    await _persistCategory(category: category, isIncome: isIncome);
   }
 
-  void _moveTransactionsToOther(String removedCategoryName) {
+  void _moveTransactionsToMissing(String removedCategoryName) {
     for (var index = 0; index < _transactions.length; index++) {
       if (_transactions[index].categoryName == removedCategoryName ||
           _transactions[index].categoryName.startsWith(
             '$removedCategoryName · ',
           )) {
         _transactions[index] = _transactions[index].copyWith(
-          categoryName: 'Other',
+          categoryName: 'Missing',
         );
       }
     }
@@ -295,13 +611,33 @@ class FinanceAppState extends ChangeNotifier {
     // Financial totals stay in USD internally; the entered value is converted
     // from the user's selected display currency using the latest fetched rate.
     final value = CurrencySettings.toUsd(amount.abs());
+    _recordTransaction(
+      amountUsd: value,
+      icon: icon,
+      iconColor: iconColor,
+      isIncome: isIncome,
+      category: category,
+      subcategory: subcategory,
+      note: note,
+    );
+  }
+
+  void _recordTransaction({
+    required double amountUsd,
+    required IconData icon,
+    required Color iconColor,
+    required bool isIncome,
+    required ExpenseCategory category,
+    String? subcategory,
+    String? note,
+  }) {
     final now = DateTime.now();
 
-    _balance += isIncome ? value : -value;
+    _balance += isIncome ? amountUsd : -amountUsd;
     if (isIncome) {
-      _income += value;
+      _income += amountUsd;
     } else {
-      _expenses += value;
+      _expenses += amountUsd;
     }
 
     _transactions.insert(
@@ -311,7 +647,7 @@ class FinanceAppState extends ChangeNotifier {
             ? category.name
             : '${category.name} · $subcategory',
         subtitle: _buildSubtitle(now, note),
-        amount: value,
+        amount: amountUsd,
         icon: icon,
         iconColor: iconColor,
         categoryName: subcategory == null
@@ -319,6 +655,7 @@ class FinanceAppState extends ChangeNotifier {
             : '${category.name} · $subcategory',
         note: note?.trim().isEmpty == true ? null : note?.trim(),
         negative: !isIncome,
+        createdAt: now,
       ),
     );
 
@@ -327,6 +664,11 @@ class FinanceAppState extends ChangeNotifier {
     recentIds.insert(0, category.id);
 
     notifyListeners();
+
+    final transaction = _transactions.first;
+    unawaited(_write(
+      (uid) => _financeRepository.saveTransaction(uid, transaction),
+    ));
   }
 
   Future<void> _persistCategory({
@@ -507,7 +849,7 @@ class FinanceAppState extends ChangeNotifier {
     ),
     ExpenseCategory(
       id: 'other',
-      name: 'Other',
+      name: 'Missing',
       icon: Icons.category_rounded,
       subcategories: const [],
     ),

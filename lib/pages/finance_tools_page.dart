@@ -6,7 +6,7 @@ import '../utils/currency_formatters.dart';
 import '../utils/currency_settings.dart';
 import 'settings_page.dart';
 
-enum FinanceTool { plannedPayments, debts, shoppingList, converter, report }
+enum FinanceTool { converter, report }
 
 class FinanceToolsPage extends StatefulWidget {
   const FinanceToolsPage({super.key, required this.tool});
@@ -16,8 +16,6 @@ class FinanceToolsPage extends StatefulWidget {
 }
 
 class _FinanceToolsPageState extends State<FinanceToolsPage> {
-  final _items = <String>[];
-  final _controller = TextEditingController();
   final _amountController = TextEditingController(text: '1');
   double _amount = 1;
   late String _sourceCode;
@@ -39,15 +37,11 @@ class _FinanceToolsPageState extends State<FinanceToolsPage> {
 
   @override
   void dispose() {
-    _controller.dispose();
     _amountController.dispose();
     super.dispose();
   }
 
   String get _title => switch (widget.tool) {
-    FinanceTool.plannedPayments => 'Planned Payments',
-    FinanceTool.debts => 'Debts',
-    FinanceTool.shoppingList => 'Shopping List',
     FinanceTool.converter => 'Currency Converter',
     FinanceTool.report => 'Export Report',
   };
@@ -59,55 +53,7 @@ class _FinanceToolsPageState extends State<FinanceToolsPage> {
       body: switch (widget.tool) {
         FinanceTool.converter => _converter(context),
         FinanceTool.report => _report(context),
-        _ => _listTool(context),
       },
-    );
-  }
-
-  Widget _listTool(BuildContext context) {
-    final hint = switch (widget.tool) {
-      FinanceTool.plannedPayments => 'e.g. Electricity bill on 10 Aug',
-      FinanceTool.debts => 'e.g. Alex owes me 500',
-      _ => 'e.g. Milk',
-    };
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          TextField(
-            controller: _controller,
-            decoration: InputDecoration(
-              hintText: hint,
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.add_circle),
-                onPressed: _addItem,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: _items.isEmpty
-                ? Center(
-                    child: Text(
-                      'No ${_title.toLowerCase()} yet. Add your first item above.',
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: _items.length,
-                    itemBuilder: (_, index) => Card(
-                      child: ListTile(
-                        title: Text(_items[index]),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () =>
-                              setState(() => _items.removeAt(index)),
-                        ),
-                      ),
-                    ),
-                  ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -233,15 +179,6 @@ class _FinanceToolsPageState extends State<FinanceToolsPage> {
         ],
       ),
     );
-  }
-
-  void _addItem() {
-    final value = _controller.text.trim();
-    if (value.isEmpty) return;
-    setState(() {
-      _items.add(value);
-      _controller.clear();
-    });
   }
 
   Future<void> _selectCurrency({

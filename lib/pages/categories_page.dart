@@ -185,7 +185,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
       builder: (dialogContext) => AlertDialog(
         title: Text('Delete ${category.name}?'),
         content: const Text(
-          'Transactions in this category will be moved to Other.',
+          'Transactions in this category will be moved to Missing.',
         ),
         actions: [
           TextButton(

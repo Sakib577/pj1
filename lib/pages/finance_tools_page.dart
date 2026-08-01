@@ -219,7 +219,7 @@ class _FinanceToolsPageState extends State<FinanceToolsPage> {
           ElevatedButton.icon(
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: report));
-              if (context.mounted)
+              if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text(
@@ -227,6 +227,7 @@ class _FinanceToolsPageState extends State<FinanceToolsPage> {
                     ),
                   ),
                 );
+              }
             },
             icon: const Icon(Icons.content_copy),
             label: const Text('Copy report'),

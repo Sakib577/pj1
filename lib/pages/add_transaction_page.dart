@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../models/finance_models.dart';
+import 'category_detail_page.dart';
+import 'categories_page.dart';
 import '../state/finance_app_state.dart';
 import '../utils/currency_formatters.dart';
 
@@ -11,41 +14,65 @@ class AddTransactionPage extends StatefulWidget {
 }
 
 class _AddTransactionPageState extends State<AddTransactionPage> {
-  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _noteController = TextEditingController();
   bool _isIncome = false;
   String _amountExpression = '0';
+  ExpenseCategory? _selectedCategory;
+  String? _selectedSubcategory;
 
   @override
   void dispose() {
-    _titleController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
   void _onKeyTap(String value) {
     setState(() {
       if (value == 'back') {
-        if (_amountExpression.length <= 1) {
-          _amountExpression = '0';
+        _amountExpression = _backspaceExpression(_amountExpression);
+        return;
+      }
+
+      if (value == '=') {
+        final evaluated = _evaluateExpression(_amountExpression);
+        if (evaluated != null) {
+          _amountExpression = _formatExpressionResult(evaluated);
+        }
+        return;
+      }
+
+      if (_isOperator(value)) {
+        if (_amountExpression == '0') {
+          _amountExpression = value == '-' ? '-' : '0';
+          return;
+        }
+
+        final lastChar = _amountExpression[_amountExpression.length - 1];
+        if (_isOperator(lastChar)) {
+          _amountExpression =
+              _amountExpression.substring(0, _amountExpression.length - 1) +
+              value;
         } else {
-          _amountExpression = _amountExpression.substring(
-            0,
-            _amountExpression.length - 1,
-          );
-          if (_amountExpression.isEmpty) {
-            _amountExpression = '0';
-          }
+          _amountExpression += value;
         }
         return;
       }
 
       if (value == '.') {
-        if (_amountExpression.contains('.')) return;
+        final currentNumber = _currentNumberSegment(_amountExpression);
+        if (currentNumber.contains('.')) return;
+        if (_amountExpression.isEmpty || _isOperator(_amountExpression[_amountExpression.length - 1])) {
+          _amountExpression += '0.';
+          return;
+        }
         _amountExpression = '$_amountExpression.';
         return;
       }
 
       if (_amountExpression == '0') {
         _amountExpression = value;
+      } else if (_amountExpression == '-') {
+        _amountExpression = '-$value';
       } else {
         _amountExpression += value;
       }
@@ -56,22 +83,49 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     final normalized = _amountExpression.endsWith('.')
         ? _amountExpression.substring(0, _amountExpression.length - 1)
         : _amountExpression;
-    return double.tryParse(normalized) ?? 0;
+    return _evaluateExpression(normalized) ?? double.tryParse(normalized) ?? 0;
+  }
+
+  bool _isOperator(String value) => value == '+' || value == '-' || value == '*' || value == '/';
+
+  String _backspaceExpression(String input) {
+    if (input.length <= 1) {
+      return '0';
+    }
+
+    final shortened = input.substring(0, input.length - 1);
+    return shortened.isEmpty || shortened == '-' ? '0' : shortened;
+  }
+
+  String _currentNumberSegment(String input) {
+    var lastOperatorIndex = -1;
+    for (var index = input.length - 1; index >= 0; index--) {
+      if (_isOperator(input[index])) {
+        lastOperatorIndex = index;
+        break;
+      }
+    }
+    return input.substring(lastOperatorIndex + 1);
+  }
+
+  String _formatExpressionResult(double value) {
+    final text = value.toStringAsFixed(8).replaceFirst(RegExp(r'\.0+$'), '');
+    return text.replaceFirst(RegExp(r'(\.\d*?)0+$'), r'$1').replaceFirst(RegExp(r'\.$'), '');
+  }
+
+  double? _evaluateExpression(String expression) {
+    final cleaned = expression.replaceAll('÷', '/').replaceAll('×', '*');
+    try {
+      return _ExpressionParser(cleaned).parse();
+    } catch (_) {
+      return null;
+    }
   }
 
   void _onSave() {
-    final title = _titleController.text.trim();
+    final note = _noteController.text.trim();
     final amount = _calculateAmount();
 
-    if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter a transaction title'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -82,12 +136,19 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       return;
     }
 
-    FinanceAppScope.of(context).addTransaction(
-      title: title,
+    final state = FinanceAppScope.of(context);
+    final category = _selectedCategory ??
+        (_isIncome
+            ? state.recentIncomeCategories.first
+            : state.recentExpenseCategories.first);
+    state.addTransaction(
       amount: amount,
       icon: _isIncome ? Icons.trending_up : Icons.trending_down,
       iconColor: _isIncome ? const Color(0xFF22C55E) : const Color(0xFFF97316),
       isIncome: _isIncome,
+      category: category,
+      subcategory: _selectedSubcategory,
+      note: note.isEmpty ? null : note,
     );
 
     Navigator.of(context).pop(true);
@@ -95,8 +156,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = FinanceAppScope.of(context);
+    final categories = _isIncome ? appState.incomeCategories : appState.expenseCategories;
+    final currentCategory = _selectedCategory ?? categories.first;
     final amount = _calculateAmount();
-    final displayAmount = formatCurrencyInput(amount);
 
     return Scaffold(
       appBar: AppBar(
@@ -114,16 +177,13 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxHeight < 720;
-            final gap = compact ? 8.0 : 12.0;
-            final keypadHeight = (constraints.maxHeight * 0.35).clamp(
-              200.0,
-              300.0,
-            );
+            final gap = compact ? 3.0 : 6.0;
+            final keypadHeight = (constraints.maxHeight * 0.38).clamp(180.0, 320.0);
+            final amountPaddingVertical = compact ? 6.0 : 10.0;
+            final amountFontSize = (constraints.maxHeight * 0.033).clamp(22.0, 28.0);
+            final noteVerticalPadding = compact ? 10.0 : 12.0;
 
-            return SingleChildScrollView(
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
+            return Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -140,7 +200,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                           child: _SegmentButton(
                             label: 'Income',
                             selected: _isIncome,
-                            onTap: () => setState(() => _isIncome = true),
+                            onTap: () => setState(() { _isIncome = true; _selectedCategory = null; _selectedSubcategory = null; }),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -148,56 +208,91 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                           child: _SegmentButton(
                             label: 'Expense',
                             selected: !_isIncome,
-                            onTap: () => setState(() => _isIncome = false),
+                            onTap: () => setState(() { _isIncome = false; _selectedCategory = null; _selectedSubcategory = null; }),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  SizedBox(height: gap + 4),
+                  SizedBox(height: gap),
+                  Text('Category', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                  SizedBox(height: gap),
+                  SizedBox(
+                    height: 82,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      primary: false,
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      itemCount: categories.length + 1,
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        if (index == categories.length) {
+                          return SizedBox(
+                            width: 96,
+                            child: _AddCategoryShortcut(
+                              onTap: () => _openCategoriesPage(context),
+                            ),
+                          );
+                        }
+
+                        final category = categories[index];
+                        return SizedBox(
+                          width: 96,
+                          child: _CategoryShortcut(
+                            category: category,
+                            selected: currentCategory.id == category.id,
+                            onTap: () => _pickSubcategory(category),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  if (_selectedSubcategory != null) ...[
+                    SizedBox(height: gap),
+                    Text('${currentCategory.name} · $_selectedSubcategory', style: const TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.w700)),
+                  ],
+                  SizedBox(height: gap),
                   TextField(
-                    controller: _titleController,
-                    key: const ValueKey('transaction-title'),
-                    textInputAction: TextInputAction.next,
+                    controller: _noteController,
+                    key: const ValueKey('transaction-note'),
+                    textInputAction: TextInputAction.done,
                     decoration: InputDecoration(
-                      labelText: 'Transaction title',
-                      hintText: 'Enter a clear name',
+                      labelText: 'Note (optional)',
+                      hintText: 'Add a note for this transaction',
                       filled: true,
                       fillColor: Colors.white,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: noteVerticalPadding,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide.none,
                       ),
                     ),
                   ),
-                  SizedBox(height: gap + 4),
+                  SizedBox(height: gap),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: EdgeInsets.symmetric(vertical: amountPaddingVertical),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFF4E8),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Column(
-                      children: [
-                        const Text(
-                          'AMOUNT',
-                          style: TextStyle(
-                            letterSpacing: 0.5,
-                            color: Color(0xFF9CA3AF),
-                            fontWeight: FontWeight.w700,
-                          ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '${_isIncome ? '' : '-'}${formatCurrencyNoCents(amount)}',
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: amountFontSize,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFFF59E0B),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${_isIncome ? '' : '-'}$displayAmount',
-                          style: const TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFFF59E0B),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                   SizedBox(height: gap),
@@ -227,6 +322,104 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openCategoriesPage(BuildContext context) async {
+    final appState = FinanceAppScope.of(context);
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => CategoriesPage(isIncome: _isIncome),
+      ),
+    );
+    if (!mounted) return;
+    final refreshedCategories = _isIncome
+        ? appState.incomeCategories
+        : appState.expenseCategories;
+    final selected = _selectedCategory;
+    if (selected != null && !refreshedCategories.any((category) => category.id == selected.id)) {
+      setState(() {
+        _selectedCategory = null;
+        _selectedSubcategory = null;
+      });
+    }
+  }
+
+  Future<void> _pickSubcategory(ExpenseCategory category) async {
+    if (category.subcategories.isEmpty) {
+      setState(() { _selectedCategory = category; _selectedSubcategory = null; });
+      return;
+    }
+    final selection = await Navigator.of(context).push<CategorySelection>(
+      MaterialPageRoute(builder: (_) => CategoryDetailPage(category: category)),
+    );
+    if (selection != null && mounted) {
+      setState(() { _selectedCategory = selection.category; _selectedSubcategory = selection.subcategory; });
+    }
+  }
+
+}
+
+class _CategoryShortcut extends StatelessWidget {
+  const _CategoryShortcut({required this.category, required this.selected, required this.onTap});
+  final ExpenseCategory category;
+  final bool selected;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        height: 78,
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFFF4E8) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: selected ? const Color(0xFFF59E0B) : const Color(0xFFE5E7EB)),
+        ),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          category.isUserDefined ? Text(category.emoji ?? '🏷️', style: const TextStyle(fontSize: 24)) : Icon(category.icon, color: const Color(0xFFF59E0B)),
+          const SizedBox(height: 4),
+          Text(category.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+        ]),
+      ),
+    );
+  }
+}
+
+class _AddCategoryShortcut extends StatelessWidget {
+  const _AddCategoryShortcut({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 96,
+        height: 78,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_circle_outline_rounded, color: Color(0xFFF59E0B)),
+            SizedBox(height: 4),
+            Text(
+              'Add category',
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ],
         ),
       ),
     );
@@ -276,61 +469,269 @@ class _Keypad extends StatelessWidget {
 
   final ValueChanged<String> onTap;
 
-  static const keys = [
-    '7',
-    '8',
-    '9',
-    'back',
-    '4',
-    '5',
-    '6',
-    '.',
-    '1',
-    '2',
-    '3',
-    '0',
-  ];
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columnHeight = constraints.maxHeight;
+        final otherButtonHeight = columnHeight / 4;
+        final operatorButtonHeight = columnHeight / 5;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x100F172A),
+                blurRadius: 16,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    _KeyCell(label: '7', onTap: () => onTap('7'), height: otherButtonHeight),
+                    _KeyCell(label: '4', onTap: () => onTap('4'), height: otherButtonHeight),
+                    _KeyCell(label: '1', onTap: () => onTap('1'), height: otherButtonHeight),
+                    _KeyCell(label: '.', onTap: () => onTap('.'), height: otherButtonHeight),
+                  ],
+                ),
+              ),
+              _ColumnDivider(height: columnHeight),
+              Expanded(
+                child: Column(
+                  children: [
+                    _KeyCell(label: '8', onTap: () => onTap('8'), height: otherButtonHeight),
+                    _KeyCell(label: '5', onTap: () => onTap('5'), height: otherButtonHeight),
+                    _KeyCell(label: '2', onTap: () => onTap('2'), height: otherButtonHeight),
+                    _KeyCell(label: '0', onTap: () => onTap('0'), height: otherButtonHeight),
+                  ],
+                ),
+              ),
+              _ColumnDivider(height: columnHeight),
+              Expanded(
+                child: Column(
+                  children: [
+                    _KeyCell(label: '9', onTap: () => onTap('9'), height: otherButtonHeight),
+                    _KeyCell(label: '6', onTap: () => onTap('6'), height: otherButtonHeight),
+                    _KeyCell(label: '3', onTap: () => onTap('3'), height: otherButtonHeight),
+                    _KeyCell(label: '<-', onTap: () => onTap('back'), height: otherButtonHeight),
+                  ],
+                ),
+              ),
+              _ColumnDivider(height: columnHeight),
+              Expanded(
+                child: Column(
+                  children: [
+                    _OperatorCell(label: '÷', onTap: () => onTap('/'), height: operatorButtonHeight),
+                    _OperatorCell(label: '×', onTap: () => onTap('*'), height: operatorButtonHeight),
+                    _OperatorCell(label: '-', onTap: () => onTap('-'), height: operatorButtonHeight),
+                    _OperatorCell(label: '+', onTap: () => onTap('+'), height: operatorButtonHeight),
+                    _OperatorCell(label: '=', onTap: () => onTap('='), height: operatorButtonHeight),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _KeyCell extends StatelessWidget {
+  const _KeyCell({
+    required this.label,
+    required this.onTap,
+    required this.height,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
-    const rows = [
-      ['7', '8', '9', 'back'],
-      ['4', '5', '6', '.'],
-      ['1', '2', '3', '0'],
-    ];
-
-    return Column(
-      children: [
-        for (final row in rows) ...[
-          Expanded(
-            child: Row(
-              children: [
-                for (final key in row)
-                  Expanded(
-                    child: InkWell(
-                      key: ValueKey('key-$key'),
-                      onTap: () => onTap(key),
-                      child: Center(
-                        child: key == 'back'
-                            ? const Icon(
-                                Icons.backspace,
-                                color: Color(0xFFEF4444),
-                              )
-                            : Text(
-                                key,
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                      ),
-                    ),
+    return SizedBox(
+      height: height,
+      width: double.infinity,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          color: Colors.white,
+          alignment: Alignment.center,
+          child: label == '<-'
+              ? const Icon(Icons.backspace_outlined, color: Color(0xFF6B7280), size: 22)
+              : Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w400,
+                    color: Color(0xFF8E8E8E),
                   ),
-              ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OperatorCell extends StatelessWidget {
+  const _OperatorCell({
+    required this.label,
+    required this.onTap,
+    required this.height,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final isEquals = label == '=';
+    return SizedBox(
+      height: height,
+      width: double.infinity,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          color: const Color(0xFFFFF3E6),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: isEquals ? 24 : 22,
+              fontWeight: FontWeight.w400,
+              color: const Color(0xFFF59E0B),
             ),
           ),
-        ],
-      ],
+        ),
+      ),
     );
+  }
+}
+
+class _ColumnDivider extends StatelessWidget {
+  const _ColumnDivider({required this.height});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: height,
+      color: const Color(0xFFE8EEF5),
+    );
+  }
+}
+
+class _ExpressionParser {
+  _ExpressionParser(this._input);
+
+  final String _input;
+  int _index = 0;
+
+  double parse() {
+    final value = _parseExpression();
+    _skipWhitespace();
+    if (_index != _input.length) {
+      throw FormatException('Unexpected token');
+    }
+    return value;
+  }
+
+  double _parseExpression() {
+    var value = _parseTerm();
+    while (true) {
+      _skipWhitespace();
+      if (_match('+')) {
+        value += _parseTerm();
+      } else if (_match('-')) {
+        value -= _parseTerm();
+      } else {
+        return value;
+      }
+    }
+  }
+
+  double _parseTerm() {
+    var value = _parseFactor();
+    while (true) {
+      _skipWhitespace();
+      if (_match('*')) {
+        value *= _parseFactor();
+      } else if (_match('/')) {
+        value /= _parseFactor();
+      } else {
+        return value;
+      }
+    }
+  }
+
+  double _parseFactor() {
+    _skipWhitespace();
+    if (_match('+')) {
+      return _parseFactor();
+    }
+    if (_match('-')) {
+      return -_parseFactor();
+    }
+    if (_match('(')) {
+      final value = _parseExpression();
+      if (!_match(')')) {
+        throw FormatException('Missing closing parenthesis');
+      }
+      return value;
+    }
+    return _parseNumber();
+  }
+
+  double _parseNumber() {
+    _skipWhitespace();
+    final start = _index;
+    var seenDot = false;
+
+    while (_index < _input.length) {
+      final char = _input[_index];
+      final isDigit = char.codeUnitAt(0) >= 48 && char.codeUnitAt(0) <= 57;
+      if (isDigit) {
+        _index++;
+        continue;
+      }
+      if (char == '.' && !seenDot) {
+        seenDot = true;
+        _index++;
+        continue;
+      }
+      break;
+    }
+
+    if (start == _index) {
+      throw FormatException('Expected number');
+    }
+
+    return double.parse(_input.substring(start, _index));
+  }
+
+  void _skipWhitespace() {
+    while (_index < _input.length && _input[_index].trim().isEmpty) {
+      _index++;
+    }
+  }
+
+  bool _match(String value) {
+    if (_index < _input.length && _input[_index] == value) {
+      _index++;
+      return true;
+    }
+    return false;
   }
 }

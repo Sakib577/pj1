@@ -12,7 +12,6 @@ void main() {
 
     expect(find.text('Dashboard'), findsOneWidget);
     expect(find.text('\$0.00'), findsWidgets);
-    expect(find.text('No categories yet'), findsOneWidget);
     expect(find.text('No transactions yet'), findsOneWidget);
     expect(find.text('No planned payments yet'), findsOneWidget);
 

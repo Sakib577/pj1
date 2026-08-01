@@ -16,7 +16,7 @@ String formatCurrency(double value) {
   }
 
   final formattedWhole = buffer.toString().split('').reversed.join();
-  return '${isNegative ? '-' : ''}${CurrencySettings.symbol}${formattedWhole}.${parts.last}';
+  return '${isNegative ? '-' : ''}${CurrencySettings.symbol}$formattedWhole.${parts.last}';
 }
 
 String formatCurrencyNoCents(double value) {
@@ -28,6 +28,5 @@ String formatCurrencyNoCents(double value) {
 }
 
 String formatCurrencyInput(double value) {
-  final parts = value.toStringAsFixed(2).split('.');
-  return '${CurrencySettings.symbol}${parts.first}.${parts.last}';
+  return formatCurrencyNoCents(value);
 }

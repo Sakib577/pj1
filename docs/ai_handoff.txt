@@ -24,6 +24,8 @@ Important files
 - lib/pages/auth_page.dart: email/password sign-up and sign-in.
 - lib/pages/email_verification_page.dart: resend verification email and refresh verification state.
 - lib/pages/dashboard_page.dart: home screen and bottom navigation.
+- lib/pages/categories_page.dart: expense/income category manager, subcategories, and user-defined emoji categories.
+- lib/pages/category_detail_page.dart: reusable parent-category/subcategory selector used by Add Transaction.
 - lib/state/finance_app_state.dart: current in-memory financial state. It is lost on app restart.
 - lib/models/finance_models.dart: UI-facing model classes. They contain Flutter IconData and Color,
   so they should not be used directly as Firestore database models.
@@ -57,6 +59,21 @@ Current behavior
   are converted to USD using the currently loaded rate.
 - The planned-payment, debt, and shopping-list pages currently store their added items in page memory;
   they disappear when the page/app is closed.
+- The Categories drawer entry has Expense and Income tabs, matching the Add Transaction type selector.
+  Both kinds have built-in parent categories and useful subcategories. Income includes salary/wages,
+  dues received, interest, dividends, loan repayments, rental income, sales, gifts, refunds,
+  freelance/side work, and other income.
+- Users can create categories with an emoji and add subcategories to any category. Categories are also
+  currently in memory only.
+- Built-in categories use orange Material icons; emojis are reserved for user-defined categories. The
+  Add Transaction page shows three recent categories (tracked separately for income and expenses) plus
+  a More shortcut. Tapping a category opens a reusable general/subcategory selection page. A category
+  is required by default; the text field is an optional note. Transactions currently record the selected
+  category/subcategory name for later analytics.
+- User-defined categories and user-added subcategories can be deleted. Their affected in-memory
+  transactions are reassigned to Other. Income has its own categories: salary/wages, dues received,
+  interest, dividends, loan repayments, rental income, sales, gifts, refunds, freelance/side work,
+  and other income.
 - The report feature currently copies a plain-text report to the clipboard. Add a real CSV/PDF download
   once report records are persisted.
 - Transactions disappear on restart and are not shared between devices yet.

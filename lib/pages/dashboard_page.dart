@@ -21,9 +21,27 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  late FinanceAppState _appState;
+  bool _categoriesSynced = false;
 
   // Controls which bottom-tab page is currently visible.
   int _navIndex = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _appState = FinanceAppScope.of(context);
+    if (!_categoriesSynced) {
+      _categoriesSynced = true;
+      _appState.syncCategoriesForCurrentUser();
+    }
+  }
+
+  @override
+  void dispose() {
+    _appState.stopCategorySync();
+    super.dispose();
+  }
 
   void _onNavTap(int index) {
     // setState rebuilds UI so selected tab and content update.
@@ -36,8 +54,7 @@ class _DashboardPageState extends State<DashboardPage> {
     // Push categories page and wait for selected category text.
     final selected = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (_) =>
-            CategoriesPage(items: FinanceAppScope.of(context).categories),
+        builder: (_) => const CategoriesPage(),
       ),
     );
 
@@ -156,27 +173,6 @@ class _DashboardPageState extends State<DashboardPage> {
                 _StatsRow(stats: stats),
                 const SizedBox(height: 20),
                 _SectionHeader(
-                  title: 'Categories',
-                  trailing: 'View All',
-                  onTrailingPressed: _openCategories,
-                ),
-                const SizedBox(height: 12),
-                _EmptySectionCard(
-                  title: 'No categories yet',
-                  subtitle: 'Create your first category to organize spending.',
-                  icon: Icons.grid_view_rounded,
-                  actionLabel: 'Create Category',
-                  onActionPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Create Category tapped'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
-                _SectionHeader(
                   title: 'Recent Transactions',
                   trailing: 'View All',
                   onTrailingPressed: () {
@@ -236,11 +232,12 @@ class _DashboardPageState extends State<DashboardPage> {
       floatingActionButton: isHome
           ? FloatingActionButton(
               onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
                 final saved = await Navigator.of(context).push<bool>(
                   MaterialPageRoute(builder: (_) => const AddTransactionPage()),
                 );
                 if (saved == true && mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     const SnackBar(
                       content: Text('Transaction saved'),
                       behavior: SnackBarBehavior.floating,
@@ -609,106 +606,6 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _CategoriesRow extends StatelessWidget {
-  const _CategoriesRow({required this.categories, this.onCategoryTap});
-  final List<CategoryItem> categories;
-  final ValueChanged<CategoryItem>? onCategoryTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 112,
-      child: ListView.separated(
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
-        ),
-        scrollDirection: Axis.horizontal,
-        itemCount: categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 16),
-        itemBuilder: (context, index) {
-          final item = categories[index];
-          return InkWell(
-            onTap: () => onCategoryTap?.call(item),
-            child: Column(
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: item.color.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(item.icon, color: item.color, size: 28),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  item.label,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _EmptySectionCard extends StatelessWidget {
-  const _EmptySectionCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.actionLabel,
-    required this.onActionPressed,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final String actionLabel;
-  final VoidCallback onActionPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, size: 32, color: const Color(0xFFF59E0B)),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF6B7280)),
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: onActionPressed,
-            child: Text(
-              actionLabel,
-              style: const TextStyle(
-                color: Color(0xFFF59E0B),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _EmptyListCard extends StatelessWidget {
   const _EmptyListCard({
     required this.title,
@@ -816,7 +713,7 @@ class _TransactionTile extends StatelessWidget {
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: item.iconColor.withOpacity(0.12),
+              color: item.iconColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(item.icon, color: item.iconColor),
@@ -846,61 +743,6 @@ class _TransactionTile extends StatelessWidget {
           Text(
             '${item.negative ? '-' : ''}${formatCurrency(item.amount)}',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlannedPaymentsRow extends StatelessWidget {
-  const _PlannedPaymentsRow({required this.items});
-  final List<PlannedPayment> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (var item in items)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: _PlannedPaymentCard(item: item),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _PlannedPaymentCard extends StatelessWidget {
-  const _PlannedPaymentCard({required this.item});
-  final PlannedPayment item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: item.background,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Use app's dark foreground color for the icon so it matches
-          // other primary text/icons across the app.
-          Icon(item.icon, color: const Color(0xFF0F172A)),
-          const SizedBox(height: 12),
-          Text(item.title, style: const TextStyle(fontWeight: FontWeight.w700)),
-          Text(
-            item.due,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            formatCurrency(item.amount),
-            style: const TextStyle(fontWeight: FontWeight.w800),
           ),
         ],
       ),

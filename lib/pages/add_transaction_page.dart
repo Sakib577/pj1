@@ -61,7 +61,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       if (value == '.') {
         final currentNumber = _currentNumberSegment(_amountExpression);
         if (currentNumber.contains('.')) return;
-        if (_amountExpression.isEmpty || _isOperator(_amountExpression[_amountExpression.length - 1])) {
+        if (_amountExpression.isEmpty ||
+            _isOperator(_amountExpression[_amountExpression.length - 1])) {
           _amountExpression += '0.';
           return;
         }
@@ -86,7 +87,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     return _evaluateExpression(normalized) ?? double.tryParse(normalized) ?? 0;
   }
 
-  bool _isOperator(String value) => value == '+' || value == '-' || value == '*' || value == '/';
+  bool _isOperator(String value) =>
+      value == '+' || value == '-' || value == '*' || value == '/';
 
   String _backspaceExpression(String input) {
     if (input.length <= 1) {
@@ -110,7 +112,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   String _formatExpressionResult(double value) {
     final text = value.toStringAsFixed(8).replaceFirst(RegExp(r'\.0+$'), '');
-    return text.replaceFirst(RegExp(r'(\.\d*?)0+$'), r'$1').replaceFirst(RegExp(r'\.$'), '');
+    return text
+        .replaceFirst(RegExp(r'(\.\d*?)0+$'), r'$1')
+        .replaceFirst(RegExp(r'\.$'), '');
   }
 
   double? _evaluateExpression(String expression) {
@@ -137,7 +141,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     }
 
     final state = FinanceAppScope.of(context);
-    final category = _selectedCategory ??
+    final category =
+        _selectedCategory ??
         (_isIncome
             ? state.recentIncomeCategories.first
             : state.recentExpenseCategories.first);
@@ -157,7 +162,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   @override
   Widget build(BuildContext context) {
     final appState = FinanceAppScope.of(context);
-    final categories = _isIncome ? appState.incomeCategories : appState.expenseCategories;
+    final categories = _isIncome
+        ? appState.incomeCategories
+        : appState.expenseCategories;
     final currentCategory = _selectedCategory ?? categories.first;
     final amount = _calculateAmount();
 
@@ -177,10 +184,15 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxHeight < 720;
-            final gap = compact ? 3.0 : 6.0;
-            final keypadHeight = (constraints.maxHeight * 0.38).clamp(180.0, 320.0);
-            final amountPaddingVertical = compact ? 6.0 : 10.0;
-            final amountFontSize = (constraints.maxHeight * 0.033).clamp(22.0, 28.0);
+            final gap = compact ? 4.0 : 8.0;
+            final keypadHeight = (constraints.maxHeight * 0.34).clamp(
+              170.0,
+              300.0,
+            );
+            final amountFontSize = (constraints.maxHeight * 0.033).clamp(
+              22.0,
+              28.0,
+            );
             final noteVerticalPadding = compact ? 10.0 : 12.0;
 
             return Padding(
@@ -200,7 +212,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                           child: _SegmentButton(
                             label: 'Income',
                             selected: _isIncome,
-                            onTap: () => setState(() { _isIncome = true; _selectedCategory = null; _selectedSubcategory = null; }),
+                            onTap: () => setState(() {
+                              _isIncome = true;
+                              _selectedCategory = null;
+                              _selectedSubcategory = null;
+                            }),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -208,17 +224,26 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                           child: _SegmentButton(
                             label: 'Expense',
                             selected: !_isIncome,
-                            onTap: () => setState(() { _isIncome = false; _selectedCategory = null; _selectedSubcategory = null; }),
+                            onTap: () => setState(() {
+                              _isIncome = false;
+                              _selectedCategory = null;
+                              _selectedSubcategory = null;
+                            }),
                           ),
                         ),
                       ],
                     ),
                   ),
                   SizedBox(height: gap),
-                  Text('Category', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-                  SizedBox(height: gap),
+                  Text(
+                    'Category',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   SizedBox(
-                    height: 82,
+                    height: 86,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       primary: false,
@@ -251,9 +276,15 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                   ),
                   if (_selectedSubcategory != null) ...[
                     SizedBox(height: gap),
-                    Text('${currentCategory.name} · $_selectedSubcategory', style: const TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.w700)),
+                    Text(
+                      '${currentCategory.name} · $_selectedSubcategory',
+                      style: const TextStyle(
+                        color: Color(0xFFB45309),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
-                  SizedBox(height: gap),
+                  SizedBox(height: gap + 6),
                   TextField(
                     controller: _noteController,
                     key: const ValueKey('transaction-note'),
@@ -275,22 +306,25 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                     ),
                   ),
                   SizedBox(height: gap),
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(vertical: amountPaddingVertical),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF4E8),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        '${_isIncome ? '' : '-'}${formatCurrencyNoCents(amount)}',
-                        maxLines: 1,
-                        style: TextStyle(
-                          fontSize: amountFontSize,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFFF59E0B),
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF4E8),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${_isIncome ? '' : '-'}${formatCurrencyNoCents(amount)}',
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: amountFontSize,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFFF59E0B),
+                          ),
                         ),
                       ),
                     ),
@@ -330,16 +364,15 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   Future<void> _openCategoriesPage(BuildContext context) async {
     final appState = FinanceAppScope.of(context);
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => CategoriesPage(isIncome: _isIncome),
-      ),
+      MaterialPageRoute(builder: (_) => CategoriesPage(isIncome: _isIncome)),
     );
     if (!mounted) return;
     final refreshedCategories = _isIncome
         ? appState.incomeCategories
         : appState.expenseCategories;
     final selected = _selectedCategory;
-    if (selected != null && !refreshedCategories.any((category) => category.id == selected.id)) {
+    if (selected != null &&
+        !refreshedCategories.any((category) => category.id == selected.id)) {
       setState(() {
         _selectedCategory = null;
         _selectedSubcategory = null;
@@ -349,21 +382,30 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   Future<void> _pickSubcategory(ExpenseCategory category) async {
     if (category.subcategories.isEmpty) {
-      setState(() { _selectedCategory = category; _selectedSubcategory = null; });
+      setState(() {
+        _selectedCategory = category;
+        _selectedSubcategory = null;
+      });
       return;
     }
     final selection = await Navigator.of(context).push<CategorySelection>(
       MaterialPageRoute(builder: (_) => CategoryDetailPage(category: category)),
     );
     if (selection != null && mounted) {
-      setState(() { _selectedCategory = selection.category; _selectedSubcategory = selection.subcategory; });
+      setState(() {
+        _selectedCategory = selection.category;
+        _selectedSubcategory = selection.subcategory;
+      });
     }
   }
-
 }
 
 class _CategoryShortcut extends StatelessWidget {
-  const _CategoryShortcut({required this.category, required this.selected, required this.onTap});
+  const _CategoryShortcut({
+    required this.category,
+    required this.selected,
+    required this.onTap,
+  });
   final ExpenseCategory category;
   final bool selected;
   final VoidCallback onTap;
@@ -377,13 +419,28 @@ class _CategoryShortcut extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFFFF4E8) : Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: selected ? const Color(0xFFF59E0B) : const Color(0xFFE5E7EB)),
+          border: Border.all(
+            color: selected ? const Color(0xFFF59E0B) : const Color(0xFFE5E7EB),
+          ),
         ),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          category.isUserDefined ? Text(category.emoji ?? '🏷️', style: const TextStyle(fontSize: 24)) : Icon(category.icon, color: const Color(0xFFF59E0B)),
-          const SizedBox(height: 4),
-          Text(category.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-        ]),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            category.isUserDefined
+                ? Text(
+                    category.emoji ?? '🏷️',
+                    style: const TextStyle(fontSize: 24),
+                  )
+                : Icon(category.icon, color: const Color(0xFFF59E0B)),
+            const SizedBox(height: 4),
+            Text(
+              category.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -496,10 +553,26 @@ class _Keypad extends StatelessWidget {
               Expanded(
                 child: Column(
                   children: [
-                    _KeyCell(label: '7', onTap: () => onTap('7'), height: otherButtonHeight),
-                    _KeyCell(label: '4', onTap: () => onTap('4'), height: otherButtonHeight),
-                    _KeyCell(label: '1', onTap: () => onTap('1'), height: otherButtonHeight),
-                    _KeyCell(label: '.', onTap: () => onTap('.'), height: otherButtonHeight),
+                    _KeyCell(
+                      label: '7',
+                      onTap: () => onTap('7'),
+                      height: otherButtonHeight,
+                    ),
+                    _KeyCell(
+                      label: '4',
+                      onTap: () => onTap('4'),
+                      height: otherButtonHeight,
+                    ),
+                    _KeyCell(
+                      label: '1',
+                      onTap: () => onTap('1'),
+                      height: otherButtonHeight,
+                    ),
+                    _KeyCell(
+                      label: '.',
+                      onTap: () => onTap('.'),
+                      height: otherButtonHeight,
+                    ),
                   ],
                 ),
               ),
@@ -507,10 +580,26 @@ class _Keypad extends StatelessWidget {
               Expanded(
                 child: Column(
                   children: [
-                    _KeyCell(label: '8', onTap: () => onTap('8'), height: otherButtonHeight),
-                    _KeyCell(label: '5', onTap: () => onTap('5'), height: otherButtonHeight),
-                    _KeyCell(label: '2', onTap: () => onTap('2'), height: otherButtonHeight),
-                    _KeyCell(label: '0', onTap: () => onTap('0'), height: otherButtonHeight),
+                    _KeyCell(
+                      label: '8',
+                      onTap: () => onTap('8'),
+                      height: otherButtonHeight,
+                    ),
+                    _KeyCell(
+                      label: '5',
+                      onTap: () => onTap('5'),
+                      height: otherButtonHeight,
+                    ),
+                    _KeyCell(
+                      label: '2',
+                      onTap: () => onTap('2'),
+                      height: otherButtonHeight,
+                    ),
+                    _KeyCell(
+                      label: '0',
+                      onTap: () => onTap('0'),
+                      height: otherButtonHeight,
+                    ),
                   ],
                 ),
               ),
@@ -518,10 +607,26 @@ class _Keypad extends StatelessWidget {
               Expanded(
                 child: Column(
                   children: [
-                    _KeyCell(label: '9', onTap: () => onTap('9'), height: otherButtonHeight),
-                    _KeyCell(label: '6', onTap: () => onTap('6'), height: otherButtonHeight),
-                    _KeyCell(label: '3', onTap: () => onTap('3'), height: otherButtonHeight),
-                    _KeyCell(label: '<-', onTap: () => onTap('back'), height: otherButtonHeight),
+                    _KeyCell(
+                      label: '9',
+                      onTap: () => onTap('9'),
+                      height: otherButtonHeight,
+                    ),
+                    _KeyCell(
+                      label: '6',
+                      onTap: () => onTap('6'),
+                      height: otherButtonHeight,
+                    ),
+                    _KeyCell(
+                      label: '3',
+                      onTap: () => onTap('3'),
+                      height: otherButtonHeight,
+                    ),
+                    _KeyCell(
+                      label: '<-',
+                      onTap: () => onTap('back'),
+                      height: otherButtonHeight,
+                    ),
                   ],
                 ),
               ),
@@ -529,11 +634,31 @@ class _Keypad extends StatelessWidget {
               Expanded(
                 child: Column(
                   children: [
-                    _OperatorCell(label: '÷', onTap: () => onTap('/'), height: operatorButtonHeight),
-                    _OperatorCell(label: '×', onTap: () => onTap('*'), height: operatorButtonHeight),
-                    _OperatorCell(label: '-', onTap: () => onTap('-'), height: operatorButtonHeight),
-                    _OperatorCell(label: '+', onTap: () => onTap('+'), height: operatorButtonHeight),
-                    _OperatorCell(label: '=', onTap: () => onTap('='), height: operatorButtonHeight),
+                    _OperatorCell(
+                      label: '÷',
+                      onTap: () => onTap('/'),
+                      height: operatorButtonHeight,
+                    ),
+                    _OperatorCell(
+                      label: '×',
+                      onTap: () => onTap('*'),
+                      height: operatorButtonHeight,
+                    ),
+                    _OperatorCell(
+                      label: '-',
+                      onTap: () => onTap('-'),
+                      height: operatorButtonHeight,
+                    ),
+                    _OperatorCell(
+                      label: '+',
+                      onTap: () => onTap('+'),
+                      height: operatorButtonHeight,
+                    ),
+                    _OperatorCell(
+                      label: '=',
+                      onTap: () => onTap('='),
+                      height: operatorButtonHeight,
+                    ),
                   ],
                 ),
               ),
@@ -567,7 +692,11 @@ class _KeyCell extends StatelessWidget {
           color: Colors.white,
           alignment: Alignment.center,
           child: label == '<-'
-              ? const Icon(Icons.backspace_outlined, color: Color(0xFF6B7280), size: 22)
+              ? const Icon(
+                  Icons.backspace_outlined,
+                  color: Color(0xFF6B7280),
+                  size: 22,
+                )
               : Text(
                   label,
                   style: const TextStyle(
@@ -625,11 +754,7 @@ class _ColumnDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: height,
-      color: const Color(0xFFE8EEF5),
-    );
+    return Container(width: 1, height: height, color: const Color(0xFFE8EEF5));
   }
 }
 

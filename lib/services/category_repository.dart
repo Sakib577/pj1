@@ -4,7 +4,7 @@ import '../models/finance_models.dart';
 
 class CategoryRepository {
   CategoryRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
 
@@ -12,7 +12,9 @@ class CategoryRepository {
     String uid,
     bool isIncome,
   ) {
-    final collectionName = isIncome ? 'income_categories' : 'expense_categories';
+    final collectionName = isIncome
+        ? 'income_categories'
+        : 'expense_categories';
     return _firestore.collection('users').doc(uid).collection(collectionName);
   }
 
@@ -20,10 +22,9 @@ class CategoryRepository {
     required String uid,
     required bool isIncome,
   }) {
-    return _collection(uid, isIncome)
-        .orderBy('sortOrder')
-        .snapshots()
-        .map((snapshot) {
+    return _collection(uid, isIncome).orderBy('sortOrder').snapshots().map((
+      snapshot,
+    ) {
       return snapshot.docs
           .map((doc) => ExpenseCategory.fromMap(doc.id, doc.data()))
           .toList();
@@ -36,9 +37,10 @@ class CategoryRepository {
     required List<ExpenseCategory> fallback,
   }) async {
     await ensureSeeded(uid: uid, isIncome: isIncome, fallback: fallback);
-    final snapshot = await _collection(uid, isIncome)
-        .orderBy('sortOrder')
-        .get(const GetOptions(source: Source.serverAndCache));
+    final snapshot = await _collection(
+      uid,
+      isIncome,
+    ).orderBy('sortOrder').get(const GetOptions(source: Source.serverAndCache));
     if (snapshot.docs.isEmpty) {
       return fallback;
     }
@@ -53,7 +55,9 @@ class CategoryRepository {
     required List<ExpenseCategory> fallback,
   }) async {
     final collection = _collection(uid, isIncome);
-    final snapshot = await collection.get(const GetOptions(source: Source.serverAndCache));
+    final snapshot = await collection.get(
+      const GetOptions(source: Source.serverAndCache),
+    );
     if (snapshot.docs.isNotEmpty) return;
 
     final batch = _firestore.batch();

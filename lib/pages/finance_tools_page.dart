@@ -134,9 +134,7 @@ class _FinanceToolsPageState extends State<FinanceToolsPage> {
           const SizedBox(height: 16),
           TextField(
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: 'Amount in $sourceCode',
-            ),
+            decoration: InputDecoration(labelText: 'Amount in $sourceCode'),
             controller: _amountController,
             onChanged: (value) =>
                 setState(() => _amount = double.tryParse(value) ?? 0),

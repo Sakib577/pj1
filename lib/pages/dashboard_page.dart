@@ -52,11 +52,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _openCategories() async {
     // Push categories page and wait for selected category text.
-    final selected = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) => const CategoriesPage(),
-      ),
-    );
+    final selected = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const CategoriesPage()));
 
     if (selected != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

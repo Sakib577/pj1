@@ -56,8 +56,10 @@ class FinanceAppState extends ChangeNotifier {
 
   List<TransactionItem> get transactions => List.unmodifiable(_transactions);
   List<CategoryItem> get categories => List.unmodifiable(_categories);
-  List<ExpenseCategory> get expenseCategories => List.unmodifiable(_expenseCategories);
-  List<ExpenseCategory> get incomeCategories => List.unmodifiable(_incomeCategories);
+  List<ExpenseCategory> get expenseCategories =>
+      List.unmodifiable(_expenseCategories);
+  List<ExpenseCategory> get incomeCategories =>
+      List.unmodifiable(_incomeCategories);
   List<ExpenseCategory> get recentExpenseCategories =>
       _recentCategories(_expenseCategories, _recentCategoryIds);
   List<ExpenseCategory> get recentIncomeCategories =>
@@ -75,8 +77,11 @@ class FinanceAppState extends ChangeNotifier {
         if (category.id == id) recent.add(category);
       }
     }
-    return recent.isEmpty ? categories.take(3).toList() : recent.take(3).toList();
+    return recent.isEmpty
+        ? categories.take(3).toList()
+        : recent.take(3).toList();
   }
+
   List<PlannedPayment> get plannedPayments =>
       List.unmodifiable(_plannedPayments);
   List<BudgetCategory> get budgets => List.unmodifiable(_budgets);
@@ -151,15 +156,15 @@ class FinanceAppState extends ChangeNotifier {
     _expenseCategorySubscription = _categoryRepository
         .watchCategories(uid: uid, isIncome: false)
         .listen((categories) {
-      _replaceCategories(_expenseCategories, categories);
-      notifyListeners();
-    });
+          _replaceCategories(_expenseCategories, categories);
+          notifyListeners();
+        });
     _incomeCategorySubscription = _categoryRepository
         .watchCategories(uid: uid, isIncome: true)
         .listen((categories) {
-      _replaceCategories(_incomeCategories, categories);
-      notifyListeners();
-    });
+          _replaceCategories(_incomeCategories, categories);
+          notifyListeners();
+        });
 
     _categorySyncReady = true;
     notifyListeners();
@@ -194,8 +199,13 @@ class FinanceAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addExpenseCategory({required String name, required String emoji, bool isIncome = false}) async {
-    final id = '${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}-${DateTime.now().microsecondsSinceEpoch}';
+  Future<void> addExpenseCategory({
+    required String name,
+    required String emoji,
+    bool isIncome = false,
+  }) async {
+    final id =
+        '${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}-${DateTime.now().microsecondsSinceEpoch}';
     final categories = isIncome ? _incomeCategories : _expenseCategories;
     final category = ExpenseCategory(
       id: id,
@@ -210,7 +220,11 @@ class FinanceAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addSubcategory({required String categoryId, required String name, bool isIncome = false}) async {
+  Future<void> addSubcategory({
+    required String categoryId,
+    required String name,
+    bool isIncome = false,
+  }) async {
     final categories = isIncome ? _incomeCategories : _expenseCategories;
     for (final category in categories) {
       if (category.id == categoryId) {
@@ -225,7 +239,10 @@ class FinanceAppState extends ChangeNotifier {
     }
   }
 
-  Future<void> deleteCategory({required ExpenseCategory category, required bool isIncome}) async {
+  Future<void> deleteCategory({
+    required ExpenseCategory category,
+    required bool isIncome,
+  }) async {
     if (!category.isUserDefined) return;
     final categories = isIncome ? _incomeCategories : _expenseCategories;
     categories.remove(category);
@@ -241,7 +258,11 @@ class FinanceAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> deleteSubcategory({required ExpenseCategory category, required String subcategory, required bool isIncome}) async {
+  Future<void> deleteSubcategory({
+    required ExpenseCategory category,
+    required String subcategory,
+    required bool isIncome,
+  }) async {
     if (!category.userDefinedSubcategories.remove(subcategory)) return;
     category.subcategories.remove(subcategory);
     _moveTransactionsToOther('${category.name} · $subcategory');
@@ -251,8 +272,13 @@ class FinanceAppState extends ChangeNotifier {
 
   void _moveTransactionsToOther(String removedCategoryName) {
     for (var index = 0; index < _transactions.length; index++) {
-      if (_transactions[index].categoryName == removedCategoryName || _transactions[index].categoryName.startsWith('$removedCategoryName · ')) {
-        _transactions[index] = _transactions[index].copyWith(categoryName: 'Other');
+      if (_transactions[index].categoryName == removedCategoryName ||
+          _transactions[index].categoryName.startsWith(
+            '$removedCategoryName · ',
+          )) {
+        _transactions[index] = _transactions[index].copyWith(
+          categoryName: 'Other',
+        );
       }
     }
   }
@@ -281,12 +307,16 @@ class FinanceAppState extends ChangeNotifier {
     _transactions.insert(
       0,
       TransactionItem(
-        title: subcategory == null ? category.name : '${category.name} · $subcategory',
+        title: subcategory == null
+            ? category.name
+            : '${category.name} · $subcategory',
         subtitle: _buildSubtitle(now, note),
         amount: value,
         icon: icon,
         iconColor: iconColor,
-        categoryName: subcategory == null ? category.name : '${category.name} · $subcategory',
+        categoryName: subcategory == null
+            ? category.name
+            : '${category.name} · $subcategory',
         note: note?.trim().isEmpty == true ? null : note?.trim(),
         negative: !isIncome,
       ),
@@ -358,33 +388,245 @@ class FinanceAppState extends ChangeNotifier {
   }
 
   static List<ExpenseCategory> _defaultExpenseCategories() => [
-        ExpenseCategory(id: 'food-drinks', name: 'Food & Drinks', icon: Icons.restaurant_rounded, subcategories: ['Groceries', 'Restaurant & Café', 'Snacks', 'Food delivery']),
-        ExpenseCategory(id: 'shopping', name: 'Shopping', icon: Icons.shopping_bag_rounded, subcategories: ['Clothes & Shoes', 'Medicine', 'Electronics', 'Accessories', 'Gifts', 'Health', 'Home', 'Beauty', 'Jewellery', 'Kids', 'Pets', 'Stationery & DIY']),
-        ExpenseCategory(id: 'housing', name: 'Housing', icon: Icons.home_rounded, subcategories: ['Rent or mortgage', 'Utilities', 'Furniture', 'Repairs', 'Home supplies']),
-        ExpenseCategory(id: 'transport', name: 'Transportation', icon: Icons.directions_bus_rounded, subcategories: ['Public transport', 'Ride share', 'Taxi', 'Bicycle']),
-        ExpenseCategory(id: 'vehicle', name: 'Vehicle', icon: Icons.directions_car_rounded, subcategories: ['Fuel', 'Insurance', 'Parking', 'Rentals', 'Maintenance']),
-        ExpenseCategory(id: 'lifestyle', name: 'Lifestyle & Wellbeing', icon: Icons.self_improvement_rounded, subcategories: ['Fitness', 'Charity', 'Culture & events', 'Education', 'Healthcare', 'Hobbies', 'Travel & holidays']),
-        ExpenseCategory(id: 'entertainment', name: 'Entertainment', icon: Icons.movie_rounded, subcategories: ['Books & audiobooks', 'Subscriptions', 'Sports', 'Games', 'Movies & shows']),
-        ExpenseCategory(id: 'communication', name: 'Communication', icon: Icons.forum_rounded, subcategories: ['Internet bill', 'Phone bill', 'Postage']),
-        ExpenseCategory(id: 'software-assets', name: 'Software & Digital Assets', icon: Icons.devices_rounded, subcategories: ['Software', 'Cloud services', 'Digital assets']),
-        ExpenseCategory(id: 'investments', name: 'Investments', icon: Icons.trending_up_rounded, subcategories: ['Stocks & ETFs', 'Mutual funds', 'Bonds', 'Retirement contributions']),
-        ExpenseCategory(id: 'legal-financial', name: 'Legal & Financial', icon: Icons.account_balance_rounded, subcategories: ['Bank charges', 'Professional fees', 'Child support', 'Fines', 'Insurance', 'Loan interest', 'Taxes']),
-        ExpenseCategory(id: 'other', name: 'Other', icon: Icons.category_rounded, subcategories: const []),
-      ];
+    ExpenseCategory(
+      id: 'food-drinks',
+      name: 'Food & Drinks',
+      icon: Icons.restaurant_rounded,
+      subcategories: [
+        'Groceries',
+        'Restaurant & Café',
+        'Snacks',
+        'Food delivery',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'shopping',
+      name: 'Shopping',
+      icon: Icons.shopping_bag_rounded,
+      subcategories: [
+        'Clothes & Shoes',
+        'Medicine',
+        'Electronics',
+        'Accessories',
+        'Gifts',
+        'Health',
+        'Home',
+        'Beauty',
+        'Jewellery',
+        'Kids',
+        'Pets',
+        'Stationery & DIY',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'housing',
+      name: 'Housing',
+      icon: Icons.home_rounded,
+      subcategories: [
+        'Rent or mortgage',
+        'Utilities',
+        'Furniture',
+        'Repairs',
+        'Home supplies',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'transport',
+      name: 'Transportation',
+      icon: Icons.directions_bus_rounded,
+      subcategories: ['Public transport', 'Ride share', 'Taxi', 'Bicycle'],
+    ),
+    ExpenseCategory(
+      id: 'vehicle',
+      name: 'Vehicle',
+      icon: Icons.directions_car_rounded,
+      subcategories: ['Fuel', 'Insurance', 'Parking', 'Rentals', 'Maintenance'],
+    ),
+    ExpenseCategory(
+      id: 'lifestyle',
+      name: 'Lifestyle & Wellbeing',
+      icon: Icons.self_improvement_rounded,
+      subcategories: [
+        'Fitness',
+        'Charity',
+        'Culture & events',
+        'Education',
+        'Healthcare',
+        'Hobbies',
+        'Travel & holidays',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'entertainment',
+      name: 'Entertainment',
+      icon: Icons.movie_rounded,
+      subcategories: [
+        'Books & audiobooks',
+        'Subscriptions',
+        'Sports',
+        'Games',
+        'Movies & shows',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'communication',
+      name: 'Communication',
+      icon: Icons.forum_rounded,
+      subcategories: ['Internet bill', 'Phone bill', 'Postage'],
+    ),
+    ExpenseCategory(
+      id: 'software-assets',
+      name: 'Software & Digital Assets',
+      icon: Icons.devices_rounded,
+      subcategories: ['Software', 'Cloud services', 'Digital assets'],
+    ),
+    ExpenseCategory(
+      id: 'investments',
+      name: 'Investments',
+      icon: Icons.trending_up_rounded,
+      subcategories: [
+        'Stocks & ETFs',
+        'Mutual funds',
+        'Bonds',
+        'Retirement contributions',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'legal-financial',
+      name: 'Legal & Financial',
+      icon: Icons.account_balance_rounded,
+      subcategories: [
+        'Bank charges',
+        'Professional fees',
+        'Child support',
+        'Fines',
+        'Insurance',
+        'Loan interest',
+        'Taxes',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'other',
+      name: 'Other',
+      icon: Icons.category_rounded,
+      subcategories: const [],
+    ),
+  ];
 
   static List<ExpenseCategory> _defaultIncomeCategories() => [
-      ExpenseCategory(id: 'salary-wages', name: 'Salary & Wages', icon: Icons.payments_rounded, subcategories: ['Base salary', 'Overtime', 'Bonus', 'Commission', 'Allowance', 'Advance payment']),
-      ExpenseCategory(id: 'dues', name: 'Dues Received', icon: Icons.assignment_turned_in_rounded, subcategories: ['Outstanding payment', 'Reimbursement', 'Refund on bills', 'Pending invoice']),
-      ExpenseCategory(id: 'interest', name: 'Interest', icon: Icons.savings_rounded, subcategories: ['Savings interest', 'Deposit interest', 'Fixed deposit', 'Bond interest']),
-      ExpenseCategory(id: 'dividends', name: 'Dividends', icon: Icons.trending_up_rounded, subcategories: ['Stock dividends', 'Fund distributions', 'Cash dividends']),
-      ExpenseCategory(id: 'lending', name: 'Loan Repayments', icon: Icons.handshake_rounded, subcategories: ['Personal loan repayment', 'Business loan repayment', 'Partial repayment']),
-      ExpenseCategory(id: 'renting', name: 'Rental Income', icon: Icons.home_work_rounded, subcategories: ['Property rent', 'Equipment rent', 'Shared room', 'Parking space']),
-      ExpenseCategory(id: 'sales', name: 'Sales', icon: Icons.sell_rounded, subcategories: ['Personal items', 'Business sales', 'Online sales', 'Marketplace sale']),
-      ExpenseCategory(id: 'gifts', name: 'Gifts', icon: Icons.card_giftcard_rounded, subcategories: ['Cash gift', 'Gift card', 'Family support', 'Celebration gift']),
-      ExpenseCategory(id: 'refunds', name: 'Refunds', icon: Icons.replay_rounded, subcategories: ['Purchase refund', 'Tax refund', 'Shipping refund']),
-      ExpenseCategory(id: 'freelance', name: 'Freelance & Side Work', icon: Icons.work_outline_rounded, subcategories: ['Freelance project', 'Consulting', 'Side job', 'Contract work', 'Content creation']),
-      ExpenseCategory(id: 'other-income', name: 'Other Income', icon: Icons.category_rounded, subcategories: ['Cashback', 'Prize', 'Gift voucher', 'Other']),
-      ];
+    ExpenseCategory(
+      id: 'salary-wages',
+      name: 'Salary & Wages',
+      icon: Icons.payments_rounded,
+      subcategories: [
+        'Base salary',
+        'Overtime',
+        'Bonus',
+        'Commission',
+        'Allowance',
+        'Advance payment',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'dues',
+      name: 'Dues Received',
+      icon: Icons.assignment_turned_in_rounded,
+      subcategories: [
+        'Outstanding payment',
+        'Reimbursement',
+        'Refund on bills',
+        'Pending invoice',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'interest',
+      name: 'Interest',
+      icon: Icons.savings_rounded,
+      subcategories: [
+        'Savings interest',
+        'Deposit interest',
+        'Fixed deposit',
+        'Bond interest',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'dividends',
+      name: 'Dividends',
+      icon: Icons.trending_up_rounded,
+      subcategories: [
+        'Stock dividends',
+        'Fund distributions',
+        'Cash dividends',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'lending',
+      name: 'Loan Repayments',
+      icon: Icons.handshake_rounded,
+      subcategories: [
+        'Personal loan repayment',
+        'Business loan repayment',
+        'Partial repayment',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'renting',
+      name: 'Rental Income',
+      icon: Icons.home_work_rounded,
+      subcategories: [
+        'Property rent',
+        'Equipment rent',
+        'Shared room',
+        'Parking space',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'sales',
+      name: 'Sales',
+      icon: Icons.sell_rounded,
+      subcategories: [
+        'Personal items',
+        'Business sales',
+        'Online sales',
+        'Marketplace sale',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'gifts',
+      name: 'Gifts',
+      icon: Icons.card_giftcard_rounded,
+      subcategories: [
+        'Cash gift',
+        'Gift card',
+        'Family support',
+        'Celebration gift',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'refunds',
+      name: 'Refunds',
+      icon: Icons.replay_rounded,
+      subcategories: ['Purchase refund', 'Tax refund', 'Shipping refund'],
+    ),
+    ExpenseCategory(
+      id: 'freelance',
+      name: 'Freelance & Side Work',
+      icon: Icons.work_outline_rounded,
+      subcategories: [
+        'Freelance project',
+        'Consulting',
+        'Side job',
+        'Contract work',
+        'Content creation',
+      ],
+    ),
+    ExpenseCategory(
+      id: 'other-income',
+      name: 'Other Income',
+      icon: Icons.category_rounded,
+      subcategories: ['Cashback', 'Prize', 'Gift voucher', 'Other'],
+    ),
+  ];
 }
 
 class FinanceAppScope extends InheritedNotifier<FinanceAppState> {

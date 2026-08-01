@@ -41,8 +41,14 @@ class CategoryDetailPage extends StatelessWidget {
                           ),
                           alignment: Alignment.center,
                           child: category.isUserDefined
-                              ? Text(category.emoji ?? '🏷️', style: const TextStyle(fontSize: 26))
-                              : Icon(category.icon, color: const Color(0xFFF59E0B)),
+                              ? Text(
+                                  category.emoji ?? '🏷️',
+                                  style: const TextStyle(fontSize: 26),
+                                )
+                              : Icon(
+                                  category.icon,
+                                  color: const Color(0xFFF59E0B),
+                                ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -51,12 +57,17 @@ class CategoryDetailPage extends StatelessWidget {
                             children: [
                               Text(
                                 category.name,
-                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 'Tap to use the general category.',
-                                style: const TextStyle(color: Color(0xFF64748B)),
+                                style: const TextStyle(
+                                  color: Color(0xFF64748B),
+                                ),
                               ),
                             ],
                           ),
@@ -103,41 +114,48 @@ class CategoryDetailPage extends StatelessWidget {
 }
 
 class _ChoiceTile extends StatelessWidget {
-  const _ChoiceTile({required this.category, required this.label, required this.onTap});
+  const _ChoiceTile({
+    required this.category,
+    required this.label,
+    required this.onTap,
+  });
   final ExpenseCategory category;
   final String label;
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor: const Color(0xFFFFF4E8),
-          child: category.isUserDefined
-              ? Text(category.emoji ?? '🏷️')
-              : Icon(category.icon, color: const Color(0xFFF59E0B)),
-        ),
-        title: Text(label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-        trailing: const Icon(Icons.chevron_right_rounded),
-        onTap: onTap,
-      );
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+    leading: CircleAvatar(
+      backgroundColor: const Color(0xFFFFF4E8),
+      child: category.isUserDefined
+          ? Text(category.emoji ?? '🏷️')
+          : Icon(category.icon, color: const Color(0xFFF59E0B)),
+    ),
+    title: Text(
+      label,
+      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+    ),
+    trailing: const Icon(Icons.chevron_right_rounded),
+    onTap: onTap,
+  );
 }
 
-  class _EmptySubcategoryState extends StatelessWidget {
-    const _EmptySubcategoryState();
+class _EmptySubcategoryState extends StatelessWidget {
+  const _EmptySubcategoryState();
 
-    @override
-    Widget build(BuildContext context) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Text(
-          'No subcategories yet. Use the main category or add one from the categories page.',
-          style: TextStyle(color: Color(0xFF475569)),
-        ),
-      );
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Text(
+        'No subcategories yet. Use the main category or add one from the categories page.',
+        style: TextStyle(color: Color(0xFF475569)),
+      ),
+    );
   }
+}

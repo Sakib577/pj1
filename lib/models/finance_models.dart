@@ -53,8 +53,10 @@ class ExpenseCategory {
     this.isUserDefined = false,
     Set<String>? userDefinedSubcategories,
     this.sortOrder = 0,
-  })  : subcategories = List<String>.from(subcategories),
-        userDefinedSubcategories = Set<String>.from(userDefinedSubcategories ?? const {});
+  }) : subcategories = List<String>.from(subcategories),
+       userDefinedSubcategories = Set<String>.from(
+         userDefinedSubcategories ?? const {},
+       );
 
   final String id;
   final String name;
@@ -250,17 +252,18 @@ class TransactionItem {
   final IconData icon;
   final Color iconColor;
   final String categoryName;
-    final String? note;
+  final String? note;
   final bool negative;
 
-    TransactionItem copyWith({String? categoryName, String? note}) => TransactionItem(
+  TransactionItem copyWith({String? categoryName, String? note}) =>
+      TransactionItem(
         title: title,
         subtitle: subtitle,
         amount: amount,
         icon: icon,
         iconColor: iconColor,
         categoryName: categoryName ?? this.categoryName,
-      note: note ?? this.note,
+        note: note ?? this.note,
         negative: negative,
       );
 }

@@ -169,6 +169,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     final amount = _calculateAmount();
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),

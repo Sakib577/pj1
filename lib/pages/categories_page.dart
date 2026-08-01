@@ -205,52 +205,74 @@ class _CategoriesPageState extends State<CategoriesPage> {
   }
 
   Future<_NewCategory?> _showCategoryDialog(BuildContext context) async {
-    final nameController = TextEditingController();
-    final emojiController = TextEditingController(text: '🏷️');
     final result = await showDialog<_NewCategory>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('New category'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: emojiController,
-              maxLength: 4,
-              decoration: const InputDecoration(labelText: 'Emoji logo'),
-            ),
-            TextField(
-              controller: nameController,
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Category name'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+      builder: (dialogContext) => const _NewCategoryDialog(),
+    );
+    return result;
+  }
+}
+
+class _NewCategoryDialog extends StatefulWidget {
+  const _NewCategoryDialog();
+
+  @override
+  State<_NewCategoryDialog> createState() => _NewCategoryDialogState();
+}
+
+class _NewCategoryDialogState extends State<_NewCategoryDialog> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emojiController = TextEditingController(
+    text: '🏷️',
+  );
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emojiController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('New category'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _emojiController,
+            maxLength: 4,
+            decoration: const InputDecoration(labelText: 'Emoji logo'),
           ),
-          FilledButton(
-            onPressed: () {
-              final name = nameController.text.trim();
-              final emoji = emojiController.text.trim();
-              if (name.isNotEmpty) {
-                Navigator.pop(
-                  dialogContext,
-                  _NewCategory(name, emoji.isEmpty ? '🏷️' : emoji),
-                );
-              }
-            },
-            child: const Text('Create'),
+          TextField(
+            controller: _nameController,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Category name'),
           ),
         ],
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final name = _nameController.text.trim();
+            final emoji = _emojiController.text.trim();
+            if (name.isNotEmpty) {
+              Navigator.pop(
+                context,
+                _NewCategory(name, emoji.isEmpty ? '🏷️' : emoji),
+              );
+            }
+          },
+          child: const Text('Create'),
+        ),
+      ],
     );
-    nameController.dispose();
-    emojiController.dispose();
-    return result;
   }
 }
 

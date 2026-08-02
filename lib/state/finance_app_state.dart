@@ -28,6 +28,7 @@ class FinanceAppState extends ChangeNotifier {
   final List<ShoppingItem> _shoppingItems = [];
   final List<BudgetCategory> _budgets = [];
   final List<SavingsGoal> _goals = [];
+  final List<AppNotification> _notifications = [];
   final ExchangeRateService _exchangeRateService = ExchangeRateService();
   Map<String, double> _usdRates = Map.of(CurrencySettings.usdRates);
   DateTime? _ratesUpdatedAt;
@@ -43,7 +44,9 @@ class FinanceAppState extends ChangeNotifier {
   StreamSubscription<List<ShoppingItem>>? _shoppingSubscription;
   StreamSubscription<List<BudgetCategory>>? _budgetSubscription;
   StreamSubscription<List<SavingsGoal>>? _goalSubscription;
+  StreamSubscription<List<AppNotification>>? _notificationSubscription;
   bool _notifyScheduled = false;
+  bool _disposed = false;
   bool _currencyNeedsSetup = false;
   SyncStatus _syncStatus = SyncStatus.synced;
   bool _paymentNotificationsEnabled = true;
@@ -74,8 +77,16 @@ class FinanceAppState extends ChangeNotifier {
     _notifyScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _notifyScheduled = false;
+      if (_disposed) return;
       super.notifyListeners();
     });
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _stopSync();
+    super.dispose();
   }
 
   BalanceSummary get balanceSummary => BalanceSummary(
@@ -139,6 +150,10 @@ class FinanceAppState extends ChangeNotifier {
       _write((uid) => _financeRepository.savePlannedPayment(uid, payment)),
     );
     _syncReminders();
+    _addNotification(
+      'Planned payment added',
+      '${payment.title} has been scheduled.',
+    );
   }
 
   void removePlannedPayment(String id) {
@@ -146,6 +161,17 @@ class FinanceAppState extends ChangeNotifier {
     notifyListeners();
     unawaited(
       _write((uid) => _financeRepository.deletePlannedPayment(uid, id)),
+    );
+    _syncReminders();
+  }
+
+  void updatePlannedPayment(PlannedPayment payment) {
+    final index = _plannedPayments.indexWhere((item) => item.id == payment.id);
+    if (index == -1) return;
+    _plannedPayments[index] = payment;
+    notifyListeners();
+    unawaited(
+      _write((uid) => _financeRepository.savePlannedPayment(uid, payment)),
     );
     _syncReminders();
   }
@@ -398,7 +424,8 @@ class FinanceAppState extends ChangeNotifier {
           .where(
             (transaction) =>
                 transaction.negative &&
-                transaction.categoryName == budget.label,
+                transaction.categoryName == budget.label &&
+                _isInBudgetPeriod(transaction.createdAt, budget),
           )
           .fold<double>(0, (total, transaction) => total + transaction.amount);
       return budget.copyWith(spent: spent);
@@ -420,18 +447,57 @@ class FinanceAppState extends ChangeNotifier {
   }
 
   List<SavingsGoal> get savingsGoals => List.unmodifiable(_goals);
+  List<AppNotification> get notifications {
+    final result = List<AppNotification>.from(_notifications)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return List.unmodifiable(result);
+  }
 
-  void addBudget(String label, double limit) {
+  void _addNotification(String title, String body) {
+    final item = AppNotification(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      title: title,
+      body: body,
+      createdAt: DateTime.now(),
+    );
+    _notifications.insert(0, item);
+    unawaited(_write((uid) => _financeRepository.saveNotification(uid, item)));
+  }
+
+  bool _isInBudgetPeriod(DateTime? date, BudgetCategory budget) {
+    if (date == null) return false;
+    final now = DateTime.now();
+    if (budget.period == 'monthly') {
+      return date.year == now.year && date.month == now.month;
+    }
+    final days = budget.period == 'thirtyDays' ? 30 : budget.customDays;
+    var start = budget.startDate;
+    while (start.add(Duration(days: days)).isBefore(now)) {
+      start = start.add(Duration(days: days));
+    }
+    return !date.isBefore(start) &&
+        date.isBefore(start.add(Duration(days: days)));
+  }
+
+  void addBudget(
+    String label,
+    double limit, {
+    String period = 'monthly',
+    int customDays = 30,
+  }) {
     final item = BudgetCategory(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       label: label,
-      limit: limit,
+      limit: CurrencySettings.toUsd(limit),
       spent: 0,
       daysLeft: 0,
       status: 'Healthy',
       statusColor: const Color(0xFF16A34A),
       icon: Icons.account_balance_wallet_outlined,
       iconBg: const Color(0xFFFFF4E8),
+      period: period,
+      customDays: customDays,
+      startDate: DateTime.now(),
     );
     _budgets.add(item);
     notifyListeners();
@@ -447,7 +513,7 @@ class FinanceAppState extends ChangeNotifier {
   void addSavingsGoal(String title, double target) {
     final item = SavingsGoal.fromMap(
       DateTime.now().microsecondsSinceEpoch.toString(),
-      {'title': title, 'target': target, 'current': 0},
+      {'title': title, 'target': CurrencySettings.toUsd(target), 'current': 0},
     );
     _goals.add(item);
     notifyListeners();
@@ -463,12 +529,26 @@ class FinanceAppState extends ChangeNotifier {
   void addSavingsContribution(String id, double amount) {
     final index = _goals.indexWhere((goal) => goal.id == id);
     if (index == -1 || amount <= 0) return;
+    final amountUsd = CurrencySettings.toUsd(amount);
     _goals[index] = _goals[index].copyWith(
-      current: _goals[index].current + amount,
+      current: _goals[index].current + amountUsd,
     );
     notifyListeners();
     unawaited(
       _write((uid) => _financeRepository.saveSavingsGoal(uid, _goals[index])),
+    );
+    _recordTransaction(
+      amountUsd: amountUsd,
+      icon: Icons.savings_outlined,
+      iconColor: const Color(0xFFF59E0B),
+      isIncome: false,
+      category: ExpenseCategory(
+        id: 'savings',
+        name: 'Savings',
+        icon: Icons.savings_outlined,
+        subcategories: const [],
+      ),
+      note: 'Added to ${_goals[index].title}',
     );
   }
 
@@ -525,6 +605,7 @@ class FinanceAppState extends ChangeNotifier {
     _shoppingSubscription?.cancel();
     _budgetSubscription?.cancel();
     _goalSubscription?.cancel();
+    _notificationSubscription?.cancel();
     _syncStatusSubscription?.cancel();
     _expenseCategorySubscription = null;
     _incomeCategorySubscription = null;
@@ -535,6 +616,7 @@ class FinanceAppState extends ChangeNotifier {
     _shoppingSubscription = null;
     _budgetSubscription = null;
     _goalSubscription = null;
+    _notificationSubscription = null;
     _initialLoad = null;
     _categorySyncReady = false;
   }
@@ -590,6 +672,11 @@ class FinanceAppState extends ChangeNotifier {
       _goals
         ..clear()
         ..addAll(await _financeRepository.loadSavingsGoals(uid));
+    } catch (_) {}
+    try {
+      _notifications
+        ..clear()
+        ..addAll(await _financeRepository.loadNotifications(uid));
     } catch (_) {}
 
     try {
@@ -685,6 +772,14 @@ class FinanceAppState extends ChangeNotifier {
         ..addAll(items);
       notifyListeners();
     });
+    _notificationSubscription = _financeRepository
+        .watchNotifications(uid)
+        .listen((items) {
+          _notifications
+            ..clear()
+            ..addAll(items);
+          notifyListeners();
+        });
   }
 
   // Balance is derived from transactions. Debt activity creates matching
@@ -720,6 +815,7 @@ class FinanceAppState extends ChangeNotifier {
     _shoppingItems.clear();
     _budgets.clear();
     _goals.clear();
+    _notifications.clear();
     _currencyNeedsSetup = false;
     _paymentNotificationsEnabled = true;
     _budgetNotificationsEnabled = true;

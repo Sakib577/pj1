@@ -194,6 +194,19 @@ class FinanceRepository {
   Future<void> deleteSavingsGoal(String uid, String id) =>
       _doc(uid, 'savings_goals', id).delete();
 
+  Future<List<AppNotification>> loadNotifications(String uid) async =>
+      (await _collection(uid, 'notifications').get()).docs
+          .map((doc) => AppNotification.fromMap(doc.id, doc.data()))
+          .toList();
+  Stream<List<AppNotification>> watchNotifications(String uid) =>
+      _collection(uid, 'notifications').snapshots().map(
+        (snapshot) => snapshot.docs
+            .map((doc) => AppNotification.fromMap(doc.id, doc.data()))
+            .toList(),
+      );
+  Future<void> saveNotification(String uid, AppNotification item) =>
+      _doc(uid, 'notifications', item.id).set(item.toMap());
+
   // --- Currency settings ---
 
   Future<String?> loadCurrency(String uid) async {

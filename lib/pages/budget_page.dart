@@ -73,36 +73,66 @@ class BudgetPage extends StatelessWidget {
   Future<void> _createBudget(BuildContext context) async {
     final name = TextEditingController();
     final limit = TextEditingController();
+    var period = 'monthly';
+    final customDays = TextEditingController(text: '30');
     final saved = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Create budget'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: name,
-              decoration: const InputDecoration(labelText: 'Category name'),
-            ),
-            TextField(
-              controller: limit,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Create budget'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: name,
+                decoration: const InputDecoration(labelText: 'Category name'),
               ),
-              decoration: const InputDecoration(labelText: 'Monthly limit'),
+              TextField(
+                controller: limit,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(labelText: 'Monthly limit'),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: period,
+                items: const [
+                  DropdownMenuItem(
+                    value: 'monthly',
+                    child: Text('Calendar month'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'thirtyDays',
+                    child: Text('Every 30 days'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'custom',
+                    child: Text('Custom repeat'),
+                  ),
+                ],
+                onChanged: (value) => setDialogState(() => period = value!),
+              ),
+              if (period == 'custom')
+                TextField(
+                  controller: customDays,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Repeat every days',
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
     final amount = double.tryParse(limit.text.trim()) ?? 0;
@@ -110,10 +140,16 @@ class BudgetPage extends StatelessWidget {
         name.text.trim().isNotEmpty &&
         amount > 0 &&
         context.mounted) {
-      FinanceAppScope.of(context).addBudget(name.text.trim(), amount);
+      FinanceAppScope.of(context).addBudget(
+        name.text.trim(),
+        amount,
+        period: period,
+        customDays: int.tryParse(customDays.text) ?? 30,
+      );
     }
     name.dispose();
     limit.dispose();
+    customDays.dispose();
   }
 }
 

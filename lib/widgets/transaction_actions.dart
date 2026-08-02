@@ -101,9 +101,9 @@ Future<TransactionItem?> promptEditTransaction(
   TransactionItem item,
 ) async {
   final controller = TextEditingController(
-    text: CurrencySettings.fromUsd(item.amount)
-        .toStringAsFixed(2)
-        .replaceFirst(RegExp(r'\.?0+$'), ''),
+    text: CurrencySettings.fromUsd(
+      item.amount,
+    ).toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), ''),
   );
   final noteController = TextEditingController(text: item.note ?? '');
   var isIncome = !item.negative;
@@ -130,9 +130,7 @@ Future<TransactionItem?> promptEditTransaction(
                         child: _EditSegment(
                           label: 'Income',
                           selected: isIncome,
-                          onTap: () => setDialogState(
-                            () => isIncome = true,
-                          ),
+                          onTap: () => setDialogState(() => isIncome = true),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -140,9 +138,7 @@ Future<TransactionItem?> promptEditTransaction(
                         child: _EditSegment(
                           label: 'Expense',
                           selected: !isIncome,
-                          onTap: () => setDialogState(
-                            () => isIncome = false,
-                          ),
+                          onTap: () => setDialogState(() => isIncome = false),
                         ),
                       ),
                     ],
@@ -239,12 +235,23 @@ Future<void> showPlannedPaymentActions(
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
-            leading: const Icon(Icons.check_circle_outline, color: Color(0xFFF59E0B)),
+            leading: const Icon(
+              Icons.check_circle_outline,
+              color: Color(0xFFF59E0B),
+            ),
             title: const Text(
               'Confirm & record',
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             onTap: () => Navigator.pop(sheetContext, 'confirm'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.edit_outlined, color: Color(0xFFF59E0B)),
+            title: const Text(
+              'Edit payment',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            onTap: () => Navigator.pop(sheetContext, 'edit'),
           ),
           ListTile(
             leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
@@ -269,13 +276,67 @@ Future<void> showPlannedPaymentActions(
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          payment.isIncome
-              ? 'Recorded as income'
-              : 'Recorded as expense',
+          payment.isIncome ? 'Recorded as income' : 'Recorded as expense',
         ),
         behavior: SnackBarBehavior.floating,
       ),
     );
+    return;
+  }
+  if (choice == 'edit') {
+    final title = TextEditingController(text: payment.title);
+    final amount = TextEditingController(
+      text: CurrencySettings.fromUsd(payment.amount).toStringAsFixed(2),
+    );
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit planned payment'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: title,
+              decoration: const InputDecoration(labelText: 'Title'),
+            ),
+            TextField(
+              controller: amount,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: 'Amount',
+                prefixText: '${CurrencySettings.symbol} ',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final value = double.tryParse(amount.text.trim()) ?? 0;
+    if (saved == true &&
+        value > 0 &&
+        title.text.trim().isNotEmpty &&
+        context.mounted) {
+      state.updatePlannedPayment(
+        payment.copyWith(
+          title: title.text.trim(),
+          amount: CurrencySettings.toUsd(value),
+        ),
+      );
+    }
+    title.dispose();
+    amount.dispose();
     return;
   }
 
@@ -283,9 +344,7 @@ Future<void> showPlannedPaymentActions(
     context: context,
     builder: (dialogContext) => AlertDialog(
       title: const Text('Delete planned payment?'),
-      content: Text(
-        '${payment.title} will be removed from your schedule.',
-      ),
+      content: Text('${payment.title} will be removed from your schedule.'),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialogContext, false),

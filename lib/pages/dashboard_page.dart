@@ -8,6 +8,7 @@ import 'package:pj1/pages/budget_page.dart';
 import 'package:pj1/pages/categories_page.dart';
 import 'package:pj1/pages/debts_page.dart';
 import 'package:pj1/pages/finance_tools_page.dart';
+import 'package:pj1/pages/notification_history_page.dart';
 import 'package:pj1/pages/planned_payments_page.dart';
 import 'package:pj1/pages/profile_page.dart';
 import 'package:pj1/pages/savings_page.dart';
@@ -279,7 +280,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const NotificationSettingsPage(),
+                          builder: (_) => const NotificationHistoryPage(),
                         ),
                       );
                     },

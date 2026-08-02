@@ -827,23 +827,27 @@ class PlannedPayment {
   // same occurrence.
   final DateTime? lastConfirmedDate;
 
-  PlannedPayment copyWith({DateTime? createdAt, DateTime? lastConfirmedDate}) =>
-      PlannedPayment(
-        id: id,
-        title: title,
-        amount: amount,
-        icon: icon,
-        iconColor: iconColor,
-        categoryName: categoryName,
-        emoji: emoji,
-        subcategory: subcategory,
-        isIncome: isIncome,
-        repeat: repeat,
-        customEveryDays: customEveryDays,
-        startDate: startDate,
-        createdAt: createdAt ?? this.createdAt,
-        lastConfirmedDate: lastConfirmedDate ?? this.lastConfirmedDate,
-      );
+  PlannedPayment copyWith({
+    String? title,
+    double? amount,
+    DateTime? createdAt,
+    DateTime? lastConfirmedDate,
+  }) => PlannedPayment(
+    id: id,
+    title: title ?? this.title,
+    amount: amount ?? this.amount,
+    icon: icon,
+    iconColor: iconColor,
+    categoryName: categoryName,
+    emoji: emoji,
+    subcategory: subcategory,
+    isIncome: isIncome,
+    repeat: repeat,
+    customEveryDays: customEveryDays,
+    startDate: startDate,
+    createdAt: createdAt ?? this.createdAt,
+    lastConfirmedDate: lastConfirmedDate ?? this.lastConfirmedDate,
+  );
 
   Map<String, dynamic> toMap() {
     return {
@@ -970,6 +974,9 @@ class BudgetCategory {
     required this.statusColor,
     required this.icon,
     required this.iconBg,
+    this.period = 'monthly',
+    required this.startDate,
+    this.customDays = 30,
   });
 
   final String id;
@@ -981,6 +988,9 @@ class BudgetCategory {
   final Color statusColor;
   final IconData icon;
   final Color iconBg;
+  final String period;
+  final DateTime startDate;
+  final int customDays;
 
   BudgetCategory copyWith({double? spent}) => BudgetCategory(
     id: id,
@@ -992,9 +1002,18 @@ class BudgetCategory {
     statusColor: statusColor,
     icon: icon,
     iconBg: iconBg,
+    period: period,
+    startDate: startDate,
+    customDays: customDays,
   );
 
-  Map<String, dynamic> toMap() => {'label': label, 'limit': limit};
+  Map<String, dynamic> toMap() => {
+    'label': label,
+    'limit': limit,
+    'period': period,
+    'startDate': startDate.millisecondsSinceEpoch,
+    'customDays': customDays,
+  };
   factory BudgetCategory.fromMap(String id, Map<String, dynamic> data) =>
       BudgetCategory(
         id: id,
@@ -1006,6 +1025,12 @@ class BudgetCategory {
         statusColor: const Color(0xFF16A34A),
         icon: Icons.account_balance_wallet_outlined,
         iconBg: const Color(0xFFFFF4E8),
+        period: (data['period'] as String?) ?? 'monthly',
+        startDate: DateTime.fromMillisecondsSinceEpoch(
+          (data['startDate'] as num?)?.toInt() ??
+              DateTime.now().millisecondsSinceEpoch,
+        ),
+        customDays: (data['customDays'] as num?)?.toInt() ?? 30,
       );
 }
 
@@ -1077,4 +1102,31 @@ class SavingsGoal {
       statusBg: complete ? const Color(0xFFDCFCE7) : const Color(0xFFFFF4E8),
     );
   }
+}
+
+class AppNotification {
+  const AppNotification({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.createdAt,
+  });
+  final String id;
+  final String title;
+  final String body;
+  final DateTime createdAt;
+  Map<String, dynamic> toMap() => {
+    'title': title,
+    'body': body,
+    'createdAt': createdAt.millisecondsSinceEpoch,
+  };
+  factory AppNotification.fromMap(String id, Map<String, dynamic> data) =>
+      AppNotification(
+        id: id,
+        title: (data['title'] as String?) ?? 'Notification',
+        body: (data['body'] as String?) ?? '',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(
+          (data['createdAt'] as num?)?.toInt() ?? 0,
+        ),
+      );
 }

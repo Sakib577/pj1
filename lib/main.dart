@@ -34,17 +34,29 @@ Future<void> _enableOfflinePersistence() async {
 }
 
 // Root widget: keeps global app settings like theme and initial page.
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key, this.home});
 
   final Widget? home;
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late final FinanceAppState _appState = FinanceAppState();
+
+  @override
+  void dispose() {
+    _appState.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     const seed = Color(0xFFF59E0B);
-    final appState = FinanceAppState();
     return FinanceAppScope(
-      notifier: appState,
+      notifier: _appState,
       // FinanceAppScope is an InheritedNotifier, so every page that reads the
       // state through FinanceAppScope.of(context) is rebuilt automatically when
       // the state changes (including pushed routes, which a root ListenableBuilder
@@ -67,7 +79,7 @@ class MyApp extends StatelessWidget {
             bodyMedium: TextStyle(color: Color(0xFF0F172A)),
           ),
         ),
-        home: home ?? const AuthGate(),
+        home: widget.home ?? const AuthGate(),
       ),
     );
   }

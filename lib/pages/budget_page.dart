@@ -58,8 +58,7 @@ class BudgetPage extends StatelessWidget {
               for (final b in budgets) ...[
                 _BudgetCategoryCard(
                   item: b,
-                  onDelete: () =>
-                      FinanceAppScope.of(context).deleteBudget(b.id),
+                  onTap: () => _showActions(context, b),
                 ),
                 const SizedBox(height: 12),
               ],
@@ -151,6 +150,28 @@ class BudgetPage extends StatelessWidget {
     limit.dispose();
     customDays.dispose();
   }
+
+  Future<void> _showActions(BuildContext context, BudgetCategory item) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListTile(
+          leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+          title: const Text(
+            'Delete budget',
+            style: TextStyle(
+              color: Color(0xFFDC2626),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          onTap: () => Navigator.pop(sheetContext, 'delete'),
+        ),
+      ),
+    );
+    if (choice == 'delete' && context.mounted) {
+      FinanceAppScope.of(context).deleteBudget(item.id);
+    }
+  }
 }
 
 class _BudgetEmptyState extends StatelessWidget {
@@ -238,6 +259,17 @@ class _BudgetSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rawProgress = totalLimit == 0 ? 0.0 : totalSpent / totalLimit;
+    final status = rawProgress >= 1
+        ? 'Overspent'
+        : rawProgress >= .7
+        ? 'Risky'
+        : 'Healthy';
+    final statusColor = rawProgress >= 1
+        ? const Color(0xFFFFD0D0)
+        : rawProgress >= .7
+        ? const Color(0xFFFFEDB0)
+        : const Color(0xFFD9F99D);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -284,7 +316,7 @@ class _BudgetSummaryCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${(progress * 100).round()}%',
+                '${(rawProgress * 100).round()}%',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
@@ -292,11 +324,16 @@ class _BudgetSummaryCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          Text(
+            status,
+            style: TextStyle(color: statusColor, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: LinearProgressIndicator(
-              value: progress,
+              value: progress.clamp(0.0, 1.0),
               minHeight: 10,
               backgroundColor: Colors.white24,
               valueColor: const AlwaysStoppedAnimation(Color(0xFFFFFBE6)),
@@ -309,9 +346,9 @@ class _BudgetSummaryCard extends StatelessWidget {
 }
 
 class _BudgetCategoryCard extends StatelessWidget {
-  const _BudgetCategoryCard({required this.item, required this.onDelete});
+  const _BudgetCategoryCard({required this.item, required this.onTap});
   final BudgetCategory item;
-  final VoidCallback onDelete;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -328,97 +365,97 @@ class _BudgetCategoryCard extends StatelessWidget {
         : rawProgress >= .7
         ? const Color(0xFFE36306)
         : const Color(0xFF16A34A);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0F000000),
-            blurRadius: 12,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Align(
-            alignment: Alignment.topRight,
-            child: IconButton(
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0F000000),
+              blurRadius: 12,
+              offset: Offset(0, 6),
             ),
-          ),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: item.iconBg,
-                  borderRadius: BorderRadius.circular(12),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: item.iconBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(item.icon, color: const Color(0xFFF59E0B)),
                 ),
-                child: Icon(item.icon, color: const Color(0xFFF59E0B)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.label,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF111827),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.label,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF111827),
+                        ),
                       ),
-                    ),
-                    Text(
-                      '${item.daysLeft} days left',
-                      style: const TextStyle(
-                        color: Color(0xFF6B7280),
-                        fontSize: 13,
+                      Text(
+                        '${item.daysLeft} days left',
+                        style: const TextStyle(
+                          color: Color(0xFF6B7280),
+                          fontSize: 13,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              Text(
-                '${formatCurrency(item.spent)} / ${formatCurrency(item.limit)}',
-                textAlign: TextAlign.right,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${(progress * 100).round()}% spent',
-                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
-              ),
-              Text(
-                statusText,
-                style: TextStyle(
-                  color: statusColor,
-                  fontWeight: FontWeight.w700,
+                Text(
+                  '${formatCurrency(item.spent)} / ${formatCurrency(item.limit)}',
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 10,
-              backgroundColor: const Color(0xFFF3F4F6),
-              valueColor: const AlwaysStoppedAnimation(Color(0xFFF59E0B)),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${(progress * 100).round()}% spent',
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 12,
+                  ),
+                ),
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 10,
+                backgroundColor: const Color(0xFFF3F4F6),
+                valueColor: const AlwaysStoppedAnimation(Color(0xFFF59E0B)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -72,8 +72,7 @@ class SavingsPage extends StatelessWidget {
               for (final goal in goals) ...[
                 _SavingsGoalCard(
                   goal: goal,
-                  onDelete: () =>
-                      FinanceAppScope.of(context).deleteSavingsGoal(goal.id),
+                  onTap: () => _showActions(context, goal),
                   onAddFunds: () => _addFunds(context, goal),
                 ),
                 const SizedBox(height: 12),
@@ -160,6 +159,28 @@ class SavingsPage extends StatelessWidget {
       FinanceAppScope.of(context).addSavingsContribution(goal.id, value);
     }
     amount.dispose();
+  }
+
+  Future<void> _showActions(BuildContext context, SavingsGoal goal) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListTile(
+          leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+          title: const Text(
+            'Delete goal',
+            style: TextStyle(
+              color: Color(0xFFDC2626),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          onTap: () => Navigator.pop(sheetContext, 'delete'),
+        ),
+      ),
+    );
+    if (choice == 'delete' && context.mounted) {
+      FinanceAppScope.of(context).deleteSavingsGoal(goal.id);
+    }
   }
 }
 
@@ -280,12 +301,12 @@ class _SavingsProgressCard extends StatelessWidget {
 class _SavingsGoalCard extends StatelessWidget {
   const _SavingsGoalCard({
     required this.goal,
-    required this.onDelete,
+    required this.onTap,
     required this.onAddFunds,
   });
 
   final SavingsGoal goal;
-  final VoidCallback onDelete;
+  final VoidCallback onTap;
   final VoidCallback onAddFunds;
 
   @override
@@ -294,122 +315,122 @@ class _SavingsGoalCard extends StatelessWidget {
     final progress = goal.target == 0
         ? 0.0
         : (goal.current / goal.target).clamp(0.0, 1.0);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0F000000),
-            blurRadius: 10,
-            offset: Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: goal.iconBg,
-                  borderRadius: BorderRadius.circular(16),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0F000000),
+              blurRadius: 10,
+              offset: Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: goal.iconBg,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(goal.icon, color: goal.iconColor, size: 30),
                 ),
-                child: Icon(goal.icon, color: goal.iconColor, size: 30),
-              ),
-              IconButton(
-                onPressed: onDelete,
-                icon: const Icon(
-                  Icons.delete_outline,
-                  color: Color(0xFFDC2626),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Goal title uses a strong dark color for emphasis and legibility
-                    Text(
-                      goal.title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Goal title uses a strong dark color for emphasis and legibility
+                      Text(
+                        goal.title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      goal.subtitle,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF6B7280),
+                      const SizedBox(height: 4),
+                      Text(
+                        goal.subtitle,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF6B7280),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: goal.statusBg,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  goal.status,
-                  style: TextStyle(
-                    color: goal.statusColor,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 11,
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${formatCurrencyNoCents(goal.current)} / ${formatCurrencyNoCents(goal.target)}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF334155),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: goal.statusBg,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    goal.status,
+                    style: TextStyle(
+                      color: goal.statusColor,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                    ),
+                  ),
                 ),
-              ),
-              Text(
-                '${(progress * 100).round()}%',
-                style: const TextStyle(fontSize: 16, color: Color(0xFF6B7280)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 11,
-              backgroundColor: const Color(0xFFF1F5F9),
-              valueColor: const AlwaysStoppedAnimation(Color(0xFFF59E0B)),
+              ],
             ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: onAddFunds,
-              icon: const Icon(Icons.add),
-              label: const Text('Add funds'),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${formatCurrencyNoCents(goal.current)} / ${formatCurrencyNoCents(goal.target)}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF334155),
+                  ),
+                ),
+                Text(
+                  '${(progress * 100).round()}%',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 11,
+                backgroundColor: const Color(0xFFF1F5F9),
+                valueColor: const AlwaysStoppedAnimation(Color(0xFFF59E0B)),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onAddFunds,
+                icon: const Icon(Icons.add),
+                label: const Text('Add funds'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

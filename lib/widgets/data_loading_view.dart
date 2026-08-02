@@ -55,11 +55,6 @@ class _ThemeLoader extends StatelessWidget {
             ),
           ),
         ),
-        const Icon(
-          Icons.currency_exchange_rounded,
-          color: Color(0xFFF59E0B),
-          size: 28,
-        ),
       ],
     ),
   );

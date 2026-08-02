@@ -262,7 +262,7 @@ class _DashboardPageState extends State<DashboardPage> {
         title: !isHome
             ? Text(
                 _navIndex == 1
-                    ? 'Monthly Budgets'
+                    ? 'Budget'
                     : _navIndex == 2
                     ? 'Savings Goals'
                     : 'Profile & Settings',

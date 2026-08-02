@@ -31,7 +31,7 @@ class FinanceRepository {
     final snapshot = await _collection(
       uid,
       'transactions',
-    ).get(const GetOptions(source: Source.serverAndCache));
+    ).get(const GetOptions(source: Source.cache));
     return snapshot.docs
         .map((doc) => TransactionItem.fromMap(doc.id, doc.data()))
         .toList();
@@ -86,7 +86,7 @@ class FinanceRepository {
     final snapshot = await _collection(
       uid,
       'planned_payments',
-    ).get(const GetOptions(source: Source.serverAndCache));
+    ).get(const GetOptions(source: Source.cache));
     return snapshot.docs
         .map((doc) => PlannedPayment.fromMap(doc.id, doc.data()))
         .toList();
@@ -114,7 +114,7 @@ class FinanceRepository {
     final snapshot = await _collection(
       uid,
       'debts',
-    ).get(const GetOptions(source: Source.serverAndCache));
+    ).get(const GetOptions(source: Source.cache));
     return snapshot.docs
         .map((doc) => DebtItem.fromMap(doc.id, doc.data()))
         .toList();
@@ -142,7 +142,7 @@ class FinanceRepository {
     final snapshot = await _collection(
       uid,
       'shopping_items',
-    ).get(const GetOptions(source: Source.serverAndCache));
+    ).get(const GetOptions(source: Source.cache));
     return snapshot.docs
         .map((doc) => ShoppingItem.fromMap(doc.id, doc.data()))
         .toList();
@@ -165,9 +165,9 @@ class FinanceRepository {
   }
 
   Future<List<BudgetCategory>> loadBudgets(String uid) async =>
-      (await _collection(uid, 'budgets').get()).docs
-          .map((doc) => BudgetCategory.fromMap(doc.id, doc.data()))
-          .toList();
+      (await _collection(uid, 'budgets').get(
+        const GetOptions(source: Source.cache),
+      )).docs.map((doc) => BudgetCategory.fromMap(doc.id, doc.data())).toList();
   Stream<List<BudgetCategory>> watchBudgets(String uid) =>
       _collection(uid, 'budgets').snapshots().map(
         (snapshot) => snapshot.docs
@@ -180,9 +180,9 @@ class FinanceRepository {
       _doc(uid, 'budgets', id).delete();
 
   Future<List<SavingsGoal>> loadSavingsGoals(String uid) async =>
-      (await _collection(uid, 'savings_goals').get()).docs
-          .map((doc) => SavingsGoal.fromMap(doc.id, doc.data()))
-          .toList();
+      (await _collection(uid, 'savings_goals').get(
+        const GetOptions(source: Source.cache),
+      )).docs.map((doc) => SavingsGoal.fromMap(doc.id, doc.data())).toList();
   Stream<List<SavingsGoal>> watchSavingsGoals(String uid) =>
       _collection(uid, 'savings_goals').snapshots().map(
         (snapshot) => snapshot.docs
@@ -195,7 +195,10 @@ class FinanceRepository {
       _doc(uid, 'savings_goals', id).delete();
 
   Future<List<AppNotification>> loadNotifications(String uid) async =>
-      (await _collection(uid, 'notifications').get()).docs
+      (await _collection(
+            uid,
+            'notifications',
+          ).get(const GetOptions(source: Source.cache))).docs
           .map((doc) => AppNotification.fromMap(doc.id, doc.data()))
           .toList();
   Stream<List<AppNotification>> watchNotifications(String uid) =>
@@ -210,7 +213,11 @@ class FinanceRepository {
   // --- Currency settings ---
 
   Future<String?> loadCurrency(String uid) async {
-    final doc = await _doc(uid, 'settings', 'currency').get();
+    final doc = await _doc(
+      uid,
+      'settings',
+      'currency',
+    ).get(const GetOptions(source: Source.cache));
     if (!doc.exists) return null;
     return (doc.data()?['code'] as String?)?.trim();
   }
@@ -222,7 +229,11 @@ class FinanceRepository {
   // --- Account preferences ---
 
   Future<Map<String, dynamic>> loadPreferences(String uid) async {
-    final doc = await _doc(uid, 'settings', 'preferences').get();
+    final doc = await _doc(
+      uid,
+      'settings',
+      'preferences',
+    ).get(const GetOptions(source: Source.cache));
     return doc.data() ?? const {};
   }
 

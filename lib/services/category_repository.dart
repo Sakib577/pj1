@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/finance_models.dart';
@@ -36,17 +38,21 @@ class CategoryRepository {
     required bool isIncome,
     required List<ExpenseCategory> fallback,
   }) async {
-    await ensureSeeded(uid: uid, isIncome: isIncome, fallback: fallback);
-    final snapshot = await _collection(
-      uid,
-      isIncome,
-    ).orderBy('sortOrder').get(const GetOptions(source: Source.serverAndCache));
-    if (snapshot.docs.isEmpty) {
-      return fallback;
-    }
-    return snapshot.docs
-        .map((doc) => ExpenseCategory.fromMap(doc.id, doc.data()))
-        .toList();
+    try {
+      final snapshot = await _collection(
+        uid,
+        isIncome,
+      ).orderBy('sortOrder').get(const GetOptions(source: Source.cache));
+      if (snapshot.docs.isNotEmpty) {
+        return snapshot.docs
+            .map((doc) => ExpenseCategory.fromMap(doc.id, doc.data()))
+            .toList();
+      }
+    } catch (_) {}
+    // First use: show built-in categories immediately and seed/sync them in
+    // the background instead of holding the launch screen for the network.
+    unawaited(ensureSeeded(uid: uid, isIncome: isIncome, fallback: fallback));
+    return fallback;
   }
 
   Future<void> ensureSeeded({

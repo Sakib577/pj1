@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/finance_models.dart';
@@ -36,19 +35,31 @@ class FinanceAppState extends ChangeNotifier {
   bool _categorySyncReady = false;
   StreamSubscription<List<ExpenseCategory>>? _expenseCategorySubscription;
   StreamSubscription<List<ExpenseCategory>>? _incomeCategorySubscription;
+  StreamSubscription<List<TransactionItem>>? _transactionSubscription;
+  StreamSubscription<SyncStatus>? _syncStatusSubscription;
+  StreamSubscription<List<PlannedPayment>>? _paymentSubscription;
+  StreamSubscription<List<DebtItem>>? _debtSubscription;
+  StreamSubscription<List<ShoppingItem>>? _shoppingSubscription;
   bool _notifyScheduled = false;
+  bool _currencyNeedsSetup = false;
+  SyncStatus _syncStatus = SyncStatus.synced;
+
+  // Whether the user's records are currently offline, syncing, or synced. Lets
+  // the UI show a banner so the user knows edits are stored locally for now.
+  SyncStatus get syncStatus => _syncStatus;
+  bool get isOffline => _syncStatus == SyncStatus.offline;
+  bool get hasPendingSync => _syncStatus == SyncStatus.pending;
 
   // FinanceAppScope is an InheritedNotifier and every page depends on it, so a
   // notifyListeners() during the framework's build/layout phase (e.g. an async
-  // Firestore write completing mid route transition) can trip Flutter's
-  // InheritedElement '_dependents.isEmpty' assertion. Defer those notifications
-  // to just after the frame so dependents are never rebuilt mid-build.
+  // Firestore write completing mid-route-transition, or right after a dialog /
+  // bottom sheet closes during its pop animation) can trip Flutter's
+  // InheritedElement '_dependents.isEmpty' assertion. Always defer the
+  // notification to just after the frame so dependents are never rebuilt while
+  // the element tree is mid-deactivation. Coalesce bursts that fall in the same
+  // frame.
   @override
   void notifyListeners() {
-    if (WidgetsBinding.instance.schedulerPhase == SchedulerPhase.idle) {
-      super.notifyListeners();
-      return;
-    }
     if (_notifyScheduled) return;
     _notifyScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -125,9 +136,9 @@ class FinanceAppState extends ChangeNotifier {
     _syncReminders();
   }
 
-  // Confirms a due planned payment: records it as a real transaction, then
-  // removes one-time payments or advances repeating ones past the confirmed
-  // occurrence so they are not prompted again.
+  // Confirms a planned payment: records it as a real transaction and removes
+  // it from the planned-payments list so the confirmed amount only appears in
+  // transactions, not as an upcoming payment.
   void confirmPlannedPayment(String id) {
     final index = _plannedPayments.indexWhere((payment) => payment.id == id);
     if (index == -1) return;
@@ -144,22 +155,11 @@ class FinanceAppState extends ChangeNotifier {
       note: payment.title,
     );
 
-    if (payment.repeat == RepeatFrequency.once) {
-      _plannedPayments.removeAt(index);
-      notifyListeners();
-      unawaited(_write(
-        (uid) => _financeRepository.deletePlannedPayment(uid, payment.id),
-      ));
-    } else {
-      _plannedPayments[index] = payment.copyWith(
-        lastConfirmedDate: DateTime.now(),
-      );
-      notifyListeners();
-      final updated = _plannedPayments[index];
-      unawaited(_write(
-        (uid) => _financeRepository.savePlannedPayment(uid, updated),
-      ));
-    }
+    _plannedPayments.removeAt(index);
+    notifyListeners();
+    unawaited(_write(
+      (uid) => _financeRepository.deletePlannedPayment(uid, payment.id),
+    ));
     _syncReminders();
   }
 
@@ -269,13 +269,23 @@ class FinanceAppState extends ChangeNotifier {
   }
 
   void addShoppingItem(ShoppingItem item) {
+    if (item.id.isEmpty) {
+      item = ShoppingItem(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        name: item.name,
+        subcategory: item.subcategory,
+        createdAt: DateTime.now(),
+      );
+    }
     _shoppingItems.insert(0, item);
     notifyListeners();
+    unawaited(_write((uid) => _financeRepository.saveShoppingItem(uid, item)));
   }
 
   void deleteShoppingItem(String id) {
     _shoppingItems.removeWhere((item) => item.id == id);
     notifyListeners();
+    unawaited(_write((uid) => _financeRepository.deleteShoppingItem(uid, id)));
   }
 
   // Marks an item done and records the price as a Shopping expense transaction.
@@ -294,6 +304,8 @@ class FinanceAppState extends ChangeNotifier {
       price: CurrencySettings.toUsd(price.abs()),
       completedAt: DateTime.now(),
     );
+    final updated = _shoppingItems[index];
+    unawaited(_write((uid) => _financeRepository.saveShoppingItem(uid, updated)));
 
     ExpenseCategory? shoppingCategory;
     for (final category in _expenseCategories) {
@@ -332,10 +344,14 @@ class FinanceAppState extends ChangeNotifier {
   DateTime? get ratesUpdatedAt => _ratesUpdatedAt;
   bool get ratesLoading => _ratesLoading;
 
+  // True when the signed-in user has no currency stored yet, so the app can
+  // prompt them once to pick their default display currency.
+  bool get currencyNeedsSetup => _currencyNeedsSetup;
+
   Future<void> syncUserData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      _stopCategorySync();
+      _stopSync();
       _clearFinanceData();
       _categorySyncReady = true;
       notifyListeners();
@@ -346,7 +362,7 @@ class FinanceAppState extends ChangeNotifier {
       return;
     }
 
-    _stopCategorySync();
+    _stopSync();
     _syncedUid = user.uid;
 
     _initialLoad = _loadUserDataForUser(user.uid);
@@ -354,15 +370,25 @@ class FinanceAppState extends ChangeNotifier {
   }
 
   void stopCategorySync() {
-    _stopCategorySync();
+    _stopSync();
     notifyListeners();
   }
 
-  void _stopCategorySync() {
+  void _stopSync() {
     _expenseCategorySubscription?.cancel();
     _incomeCategorySubscription?.cancel();
+    _transactionSubscription?.cancel();
+    _paymentSubscription?.cancel();
+    _debtSubscription?.cancel();
+    _shoppingSubscription?.cancel();
+    _syncStatusSubscription?.cancel();
     _expenseCategorySubscription = null;
     _incomeCategorySubscription = null;
+    _transactionSubscription = null;
+    _syncStatusSubscription = null;
+    _paymentSubscription = null;
+    _debtSubscription = null;
+    _shoppingSubscription = null;
     _initialLoad = null;
     _categorySyncReady = false;
   }
@@ -394,9 +420,86 @@ class FinanceAppState extends ChangeNotifier {
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     } catch (_) {}
 
+    try {
+      final shoppingItems = await _financeRepository.loadShoppingItems(uid);
+      if (shoppingItems.isNotEmpty) {
+        _shoppingItems
+          ..clear()
+          ..addAll(shoppingItems)
+          ..sort(
+            (a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
+          );
+      }
+    } catch (_) {}
+
+    try {
+      final storedCurrency = await _financeRepository.loadCurrency(uid);
+      if (storedCurrency != null && storedCurrency.isNotEmpty) {
+        CurrencySettings.update(code: storedCurrency, rates: _usdRates);
+        _currencyNeedsSetup = false;
+      } else {
+        _currencyNeedsSetup = true;
+      }
+    } catch (_) {
+      // Offline: keep the current currency and do not prompt.
+    }
+
     _recomputeTotals();
     _syncReminders();
     notifyListeners();
+
+    _transactionSubscription = _financeRepository
+        .watchTransactions(uid)
+        .listen((transactions) {
+          _transactions
+            ..clear()
+            ..addAll(transactions)
+            ..sort(
+              (a, b) =>
+                  _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
+            );
+          _recomputeTotals();
+          notifyListeners();
+        });
+    _syncStatusSubscription = _financeRepository
+        .watchSyncStatus(uid)
+        .listen((status) {
+          if (status == _syncStatus) return;
+          _syncStatus = status;
+          notifyListeners();
+        });
+    _paymentSubscription = _financeRepository
+        .watchPlannedPayments(uid)
+        .listen((payments) {
+          _plannedPayments
+            ..clear()
+            ..addAll(payments)
+            ..sort(
+              (a, b) =>
+                  _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
+            );
+          notifyListeners();
+        });
+    _debtSubscription = _financeRepository.watchDebts(uid).listen((debts) {
+      _debts
+        ..clear()
+        ..addAll(debts)
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _recomputeTotals();
+      notifyListeners();
+    });
+    _shoppingSubscription = _financeRepository
+        .watchShoppingItems(uid)
+        .listen((shoppingItems) {
+          _shoppingItems
+            ..clear()
+            ..addAll(shoppingItems)
+            ..sort(
+              (a, b) =>
+                  _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
+            );
+          notifyListeners();
+        });
   }
 
   // Balance is derived from transactions plus the net effect of active or
@@ -426,6 +529,9 @@ class FinanceAppState extends ChangeNotifier {
     _transactions.clear();
     _plannedPayments.clear();
     _debts.clear();
+    _shoppingItems.clear();
+    _currencyNeedsSetup = false;
+    _syncStatus = SyncStatus.synced;
     _recomputeTotals();
   }
 
@@ -512,7 +618,17 @@ class FinanceAppState extends ChangeNotifier {
 
   void changeCurrency(String code) {
     CurrencySettings.update(code: code, rates: _usdRates);
+    _currencyNeedsSetup = false;
     notifyListeners();
+    unawaited(_write((uid) => _financeRepository.saveCurrency(uid, code)));
+  }
+
+  // Loads the exchange-rate list if it has not been fetched yet, so a first-run
+  // currency picker has real options instead of just USD.
+  Future<void> ensureCurrencyAvailable() async {
+    if (_ratesLoading) return;
+    if (_usdRates.length > 1) return;
+    await refreshExchangeRates();
   }
 
   Future<void> addExpenseCategory({
@@ -540,6 +656,7 @@ class FinanceAppState extends ChangeNotifier {
     required String categoryId,
     required String name,
     bool isIncome = false,
+    String? emoji,
   }) async {
     final categories = isIncome ? _incomeCategories : _expenseCategories;
     for (final category in categories) {
@@ -547,6 +664,10 @@ class FinanceAppState extends ChangeNotifier {
         if (!category.subcategories.contains(name)) {
           category.subcategories.add(name);
           category.userDefinedSubcategories.add(name);
+          category.subcategoryEmojis[name] = (emoji == null ||
+                  emoji.trim().isEmpty)
+              ? defaultSubcategoryEmoji(name)
+              : emoji.trim();
           notifyListeners();
           await _persistCategory(category: category, isIncome: isIncome);
         }
@@ -632,6 +753,7 @@ class FinanceAppState extends ChangeNotifier {
     String? note,
   }) {
     final now = DateTime.now();
+    final id = now.microsecondsSinceEpoch.toString();
 
     _balance += isIncome ? amountUsd : -amountUsd;
     if (isIncome) {
@@ -643,6 +765,7 @@ class FinanceAppState extends ChangeNotifier {
     _transactions.insert(
       0,
       TransactionItem(
+        id: id,
         title: subcategory == null
             ? category.name
             : '${category.name} · $subcategory',
@@ -669,6 +792,32 @@ class FinanceAppState extends ChangeNotifier {
     unawaited(_write(
       (uid) => _financeRepository.saveTransaction(uid, transaction),
     ));
+  }
+
+  void updateTransaction(TransactionItem updated) {
+    final index = _transactions.indexWhere((txn) => txn.id == updated.id);
+    if (index == -1) return;
+    _transactions[index] = updated;
+    _recomputeTotals();
+    notifyListeners();
+    if (updated.id != null) {
+      unawaited(_write(
+        (uid) => _financeRepository.updateTransaction(
+          uid,
+          updated.id!,
+          updated,
+        ),
+      ));
+    }
+  }
+
+  void deleteTransaction(String id) {
+    final index = _transactions.indexWhere((txn) => txn.id == id);
+    if (index == -1) return;
+    _transactions.removeAt(index);
+    _recomputeTotals();
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.deleteTransaction(uid, id)));
   }
 
   Future<void> _persistCategory({
@@ -971,16 +1120,29 @@ class FinanceAppState extends ChangeNotifier {
   ];
 }
 
-class FinanceAppScope extends InheritedNotifier<FinanceAppState> {
+// FinanceAppScope is a plain InheritedWidget that simply exposes the shared
+// FinanceAppState. It deliberately does NOT use InheritedNotifier: relying on
+// the framework to rebuild every dependent from an InheritedNotifier during a
+// route/dialog pop can trip Flutter's InheritedElement '_dependents.isEmpty'
+// assertion. Instead the app subtree is rebuilt from the root via a
+// ListenableBuilder (see main.dart), which never touches the inherited
+// element's dependents. updateShouldNotify stays false because the state
+// instance never changes.
+class FinanceAppScope extends InheritedWidget {
   const FinanceAppScope({
     super.key,
-    required FinanceAppState notifier,
+    required this.notifier,
     required super.child,
-  }) : super(notifier: notifier);
+  }) : super();
+
+  final FinanceAppState notifier;
+
+  @override
+  bool updateShouldNotify(FinanceAppScope oldWidget) => false;
 
   static FinanceAppState of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<FinanceAppScope>();
     assert(scope != null, 'FinanceAppScope not found in widget tree.');
-    return scope!.notifier!;
+    return scope!.notifier;
   }
 }

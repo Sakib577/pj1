@@ -390,7 +390,18 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       return;
     }
     final selection = await Navigator.of(context).push<CategorySelection>(
-      MaterialPageRoute(builder: (_) => CategoryDetailPage(category: category)),
+      MaterialPageRoute(
+        builder: (_) => CategoryDetailPage(
+          category: category,
+          onAddSubcategory: (name, emoji) => FinanceAppScope.of(context)
+              .addSubcategory(
+                categoryId: category.id,
+                name: name,
+                emoji: emoji,
+                isIncome: _isIncome,
+              ),
+        ),
+      ),
     );
     if (selection != null && mounted) {
       setState(() {

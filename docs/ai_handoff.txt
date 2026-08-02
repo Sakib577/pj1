@@ -6,9 +6,9 @@ Purpose
 This is a Flutter expense tracker for Android and Web. It has a polished UI shell,
 email/password authentication, email verification, Firestore access control,
 per-user categories synced to Firestore, and transactions / planned payments /
-debts persisted to Firestore. Local Android notifications remind about upcoming
-planned payments (2 days before and on the due day). Budgets, savings goals, and
-shopping-list items are still kept only in memory.
+debts / shopping-list items persisted to Firestore with live snapshot sync. Local
+Android notifications remind about upcoming planned payments (2 days before and on
+the due day). Budgets and savings goals are still in-memory UI shells.
 
 Technology
 ----------
@@ -21,7 +21,12 @@ Technology
 
 Important files
 ---------------
-- lib/main.dart: initializes Firebase, sets the theme, starts MyApp.
+- lib/main.dart: initializes Firebase, sets the theme, starts MyApp. After
+  initialization it enables Firestore offline persistence globally
+  (Settings(persistenceEnabled: true, cacheSizeBytes: CACHE_SIZE_UNLIMITED)) so
+  reads come from a durable on-device cache and offline writes are buffered and
+  replayed when connectivity returns (Android/iOS and Chrome; best-effort on
+  browsers that lack IndexedDB support).
 - lib/auth_gate.dart: routes signed-out users to AuthPage, unverified users to
   EmailVerificationPage, and verified users to DashboardPage.
 - lib/pages/auth_page.dart: email/password sign-up and sign-in.
@@ -46,8 +51,9 @@ Important files
 - lib/pages/savings_page.dart: Savings Goals tab UI (progress card, "Create New
   Goal" button, filter). Fed from in-memory goals; empty until goals exist.
 - lib/pages/transactions_page.dart: "Recent Transactions" page with All / Income /
-  Expenses filter segments and the same tile theme as the dashboard list. Reachable
-  from the dashboard "View All" link.
+  Expenses filter segments and the same tile theme as the dashboard list. Tapping a
+  tile opens an action sheet with Edit (amount, income/expense, note) and Delete
+  (with confirmation). Reachable from the dashboard "View All" link.
 - lib/pages/planned_payments_page.dart: planned payments list plus the "New Planned
   Payment" form. Payments pick an income/expense category (with subcategory), a
   title, an amount, a repeat schedule (one time / daily / weekly / monthly / custom
@@ -67,33 +73,42 @@ Important files
   form shows subcategory chips (General + each subcategory) plus an "Add
   subcategory" chip; tapping a subcategory opens an item-name dialog and adds the
   item (General items use no subcategory). Checking an item prompts for its price
-  and records it as a Shopping expense transaction. Items and prices are stored in
-  memory via FinanceAppState. Reachable from the drawer.
+  and records it as a Shopping expense transaction. Items persist to Firestore and
+  sync via a live snapshot stream.
 - lib/pages/profile_page.dart: profile card, balance/income/expenses stats, and sign
   out. Also hosts the Select Currency entry point to SettingsPage.
 - lib/pages/settings_page.dart: select the default display currency (searchable
   bottom-sheet picker) and refresh live rates.
 - lib/state/finance_app_state.dart: global financial state (transactions, debts,
   shopping items, budgets, savings goals, categories cache, currency). Loads and
-  watches categories from Firestore for the signed-in user and loads persisted
-  transactions / planned payments / debts, then recomputes balance, income, and
-  expenses from those records. Every transaction / planned payment / debt mutation
-  is written through to Firestore (failures are swallowed so offline use never
-  blocks the UI). completeShoppingItem adds a Shopping expense transaction when an
-  item is checked off. Debts affect the balance: borrowing adds money and lending
-  subtracts it at creation; Repaid reverses that money movement; Close/Forgive never
-  moves money. confirmPlannedPayment records a due payment as a real transaction and
-  removes it (one-time) or advances its lastConfirmedDate (repeating). On load,
-  expense categories are normalized so the "Missing/Uncategorized" catch-all becomes
-  "Missing" and is kept first in the list. notifyListeners() defers via
-  addPostFrameCallback when the scheduler is mid-build to avoid Flutter's
-  InheritedElement '_dependents.isEmpty' assertion.
+  watches categories from Firestore for the signed-in user and subscribes to live
+  snapshot streams for transactions, planned payments, debts, and shopping items,
+  recomputing balance, income, and expenses from those records on every change.
+  Every mutation is written through to Firestore (failures are swallowed so offline
+  use never blocks the UI; Firestore's own on-device queue replays offline writes
+  when connectivity returns). completeShoppingItem adds a Shopping expense
+  transaction when an item is checked off. Debts affect the balance: borrowing adds
+  money and lending subtracts it at creation; Repaid reverses that money movement;
+Close/Forgive never moves money. confirmPlannedPayment records a due payment as a
+   real transaction and removes it from the planned list (so a confirmed amount
+   shows only as a transaction, never as an upcoming payment). On load, expense
+   categories are normalized so the "Missing/
+   Uncategorized" catch-all becomes "Missing" and is kept first in the list.
+   notifyListeners() defers via addPostFrameCallback when the scheduler is mid-build
+   to avoid Flutter's InheritedElement '_dependents.isEmpty' assertion. Subcategories
+   carry a per-name emoji (subcategoryEmojis) chosen via an emoji picker for
+   user-defined ones or derived from a curated default map. The state tracks
+   SyncStatus (synced / offline / pending) from the transactions snapshot metadata
+   and exposes syncStatus, isOffline, and hasPendingSync.
 - lib/services/category_repository.dart: reads/writes/seeds categories in Firestore
   at users/{uid}/expense_categories and users/{uid}/income_categories and exposes a
   live snapshot stream.
 - lib/services/finance_repository.dart: reads/writes transactions, planned
-  payments, and debts in Firestore at users/{uid}/transactions,
-  users/{uid}/planned_payments, and users/{uid}/debts.
+  payments, debts, and shopping items in Firestore at users/{uid}/transactions,
+  users/{uid}/planned_payments, users/{uid}/debts, and users/{uid}/shopping_items.
+  Exposes both one-time loads and live snapshot streams for every collection, plus
+  watchSyncStatus() reporting SyncStatus derived from the transactions snapshot's
+  metadata (includeMetadataChanges: true).
 - lib/services/payment_reminder_service.dart: wraps flutter_local_notifications +
   flutter_timezone + timezone to schedule Android reminders at 9 AM local time two
   days before each planned payment's due date and on the due date itself. Reschedules
@@ -104,7 +119,9 @@ Important files
   IconData and Color, so they should not be used directly as Firestore database
   models, but they do carry toMap/fromMap serialization (icons via a stable name
   mapping, colors via ARGB ints) used by the finance repository. ExpenseCategory has
-  a toMap/fromMap for the Firestore category docs. PlannedPayment carries a repeat
+  a toMap/fromMap for the Firestore category docs, a subcategoryEmojis map, and a
+  subcategoryEmoji() + defaultSubcategoryEmoji() lookup. SyncStatus is an enum
+  (synced / offline / pending) used to surface offline/syncing state. PlannedPayment carries a repeat
   schedule (RepeatFrequency once/daily/weekly/monthly/custom), a nextDue() helper,
   a lastConfirmedDate used to skip already-confirmed occurrences, and a
   needsConfirmation flag. DebtItem uses a DebtSettlement enum (active/closed/repaid)
@@ -156,10 +173,10 @@ Current behavior
   and repeats one time, daily, weekly, monthly, or custom (every N days) starting
   from a chosen date. Cards show the repeat badge and the next due date (overdue /
   due today). Payments can be deleted. On app open the dashboard checks for payments
-  due today or overdue and shows a "Payments due" dialog; "Confirm & record" turns
-  each into a real transaction (updates balance, income/expense stats, and Recent
-  Transactions), removes one-time payments, and advances repeating ones. Payments
-  persist to Firestore.
+  due today or overdue and shows a "Payments due" dialog with three actions: Skip,
+  Delete (removes the scheduled payment), or Confirm & record (turns each into a
+  real transaction and removes it from the planned list, so a confirmed amount shows
+  only as a transaction).
 - Debts have a dedicated page with an Active / Closed toggle; each view is split into
   Borrowed and Lent sections. A debt stores a person, an amount, a type
   (borrowed/lent), and an optional note. Adding a debt moves the balance (borrowed
@@ -172,8 +189,8 @@ Current behavior
   chips plus an "Add subcategory" chip; tapping a subcategory opens an item-name
   dialog and adds the item (General items get no subcategory). Subcategories persist
   to Firestore via the existing category sync. Checking off an item prompts for its
-  price and automatically adds a Shopping expense transaction. Items are stored in
-  memory only.
+  price and automatically adds a Shopping expense transaction. Items persist to
+  Firestore and sync live.
 - Categories ARE now persisted per user. On first dashboard load the app seeds the
   default categories into Firestore (users/{uid}/expense_categories and
   income_categories), loads them, and subscribes to live snapshots. User-defined
@@ -200,12 +217,18 @@ Current behavior
   amount formatting uses the selected display currency. Financial totals are held
   internally in USD and newly entered amounts are converted to USD using the
   currently loaded rate.
-- Transactions, planned payments, and debts are persisted to Firestore under
-  users/{uid}/transactions, users/{uid}/planned_payments, and users/{uid}/debts.
-  Balance, income, and expenses are recomputed from those records on every load, so
-  the dashboard survives app restarts and syncs across devices. Shopping-list items,
-  budgets, and savings goals are still in-memory only; they disappear when the
-  app/page is closed.
+- Transactions, planned payments, debts, and shopping-list items are persisted to
+  Firestore under users/{uid}/transactions, users/{uid}/planned_payments,
+  users/{uid}/debts, and users/{uid}/shopping_items. The state subscribes to live
+  snapshot streams for all four, so edits made on one device appear on others and
+  balance/income/expenses stay in sync. Firestore offline persistence is enabled
+  globally (main.dart), so on Android/iOS and Chrome reads come from a durable
+  on-device cache and offline edits are buffered and replayed on reconnect. The
+  dashboard shows a slim banner when the data is offline ("Offline — changes saved
+  locally") or has pending local writes ("Syncing…"), driven by SyncStatus surfaced
+  from the transactions snapshot metadata. Transactions
+  can be edited (amount / income-expense / note) or deleted from the Recent
+  Transactions page. Budgets and savings goals are still in-memory UI shells.
 - Android local notifications remind about planned payments: a "Payment coming up"
   notification 2 days before the due date and a "Due today" notification on the due
   date, both at 9 AM device-local time. Reminders are (re)scheduled on every app
@@ -226,18 +249,19 @@ Recommended next work
    cents (not double) with a categoryId reference, updatedAt, and sync status.
    Currently amounts are stored as USD doubles and the display subtitle is
    persisted as-is, which is lossy for editing/analytics.
-2. Move transaction reads to a Firestore snapshot stream instead of a one-time load
-   so the dashboard stays live across devices (planned payments and debts could
-   follow the same pattern).
+2. Add per-document updatedAt and conflict resolution. Firestore offline persistence
+   and a SyncStatus banner (offline / syncing) are now in place, but concurrent edits
+   to the same record on two devices are still last-write-wins.
 3. Add encrypted offline storage for Android/iOS/macOS (for example Drift +
    SQLCipher) and keep the encryption key in flutter_secure_storage. Firestore
    offline cache alone is not a complete app-controlled encrypted local database.
 4. Design conflict handling and an offline sync queue before treating the local
-   database as the primary source of truth. Firestore writes currently swallow
-   failures silently, so offline edits are lost on restart.
-5. Persist shopping-list items, budgets, and savings goals, and add edit/delete
-   transactions. Notifications currently rely on the app being opened to
-   reschedule; consider an on-device scheduler/periodic task.
+   database as the primary source of truth. Firestore's on-device queue already
+   replays offline writes, but conflicts (same record edited on two devices) are
+   last-write-wins.
+5. Add a creation flow for budgets and savings goals (currently UI shells with no
+   data to persist), then persist them. Notifications currently rely on the app
+   being opened to reschedule; consider an on-device scheduler/periodic task.
 6. Fix test/widget_test.dart so it matches the new Add Transaction calculator-keypad
    flow (it currently fails because it taps old keys that no longer exist).
 7. Add password reset, resend-email cooldown, account deletion, error telemetry, and

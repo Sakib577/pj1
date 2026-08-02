@@ -52,10 +52,14 @@ class ExpenseCategory {
     this.icon,
     this.isUserDefined = false,
     Set<String>? userDefinedSubcategories,
+    Map<String, String>? subcategoryEmojis,
     this.sortOrder = 0,
   }) : subcategories = List<String>.from(subcategories),
        userDefinedSubcategories = Set<String>.from(
          userDefinedSubcategories ?? const {},
+       ),
+       subcategoryEmojis = Map<String, String>.from(
+         subcategoryEmojis ?? const {},
        );
 
   final String id;
@@ -65,6 +69,7 @@ class ExpenseCategory {
   final bool isUserDefined;
   final List<String> subcategories;
   final Set<String> userDefinedSubcategories;
+  final Map<String, String> subcategoryEmojis;
   final int sortOrder;
 
   ExpenseCategory copyWith({
@@ -75,6 +80,7 @@ class ExpenseCategory {
     bool? isUserDefined,
     List<String>? subcategories,
     Set<String>? userDefinedSubcategories,
+    Map<String, String>? subcategoryEmojis,
     int? sortOrder,
   }) {
     return ExpenseCategory(
@@ -86,6 +92,7 @@ class ExpenseCategory {
       subcategories: subcategories ?? this.subcategories,
       userDefinedSubcategories:
           userDefinedSubcategories ?? this.userDefinedSubcategories,
+      subcategoryEmojis: subcategoryEmojis ?? this.subcategoryEmojis,
       sortOrder: sortOrder ?? this.sortOrder,
     );
   }
@@ -98,6 +105,7 @@ class ExpenseCategory {
       'isUserDefined': isUserDefined,
       'subcategories': subcategories,
       'userDefinedSubcategories': userDefinedSubcategories.toList(),
+      'subcategoryEmojis': subcategoryEmojis,
       'sortOrder': sortOrder,
     };
   }
@@ -115,9 +123,132 @@ class ExpenseCategory {
       userDefinedSubcategories: Set<String>.from(
         data['userDefinedSubcategories'] as List? ?? const [],
       ),
+      subcategoryEmojis: Map<String, String>.from(
+        (data['subcategoryEmojis'] as Map? ?? const {})
+            .map((key, value) => MapEntry(key.toString(), value.toString())),
+      ),
       sortOrder: (data['sortOrder'] as int?) ?? 0,
     );
   }
+}
+
+/// Returns the logo (emoji) to show for a subcategory: the user-set emoji when
+/// present, otherwise a sensible default. Different subcategories map to
+/// different emojis.
+String subcategoryEmoji(ExpenseCategory category, String subcategory) {
+  final stored = category.subcategoryEmojis[subcategory];
+  if (stored != null && stored.trim().isNotEmpty) return stored;
+  return defaultSubcategoryEmoji(subcategory);
+}
+
+/// A curated default emoji per common subcategory, falling back to a stable,
+/// name-derived emoji so that every distinct subcategory still gets its own.
+String defaultSubcategoryEmoji(String name) {
+  const map = <String, String>{
+    'Groceries': '🛒',
+    'Restaurant & Café': '🍽️',
+    'Snacks': '🍿',
+    'Food delivery': '🛵',
+    'Clothes & Shoes': '👕',
+    'Medicine': '💊',
+    'Electronics': '📱',
+    'Accessories': '🧢',
+    'Gifts': '🎁',
+    'Health': '🩺',
+    'Home': '🏡',
+    'Beauty': '💄',
+    'Jewellery': '💍',
+    'Kids': '🧸',
+    'Pets': '🐾',
+    'Stationery & DIY': '🛠',
+    'Rent or mortgage': '🏠',
+    'Utilities': '💡',
+    'Furniture': '🛋',
+    'Repairs': '🔧',
+    'Home supplies': '🧻',
+    'Public transport': '🚌',
+    'Ride share': '🚕',
+    'Taxi': '🚖',
+    'Bicycle': '🚲',
+    'Fuel': '⛽',
+    'Insurance': '🛡',
+    'Parking': '🅿',
+    'Rentals': '🚙',
+    'Maintenance': '🔩',
+    'Fitness': '🏋',
+    'Charity': '🤝',
+    'Culture & events': '🎭',
+    'Education': '📚',
+    'Healthcare': '🩺',
+    'Hobbies': '🎨',
+    'Travel & holidays': '✈️',
+    'Books & audiobooks': '📖',
+    'Subscriptions': '🔁',
+    'Sports': '⚽',
+    'Games': '🎮',
+    'Movies & shows': '🎬',
+    'Internet bill': '🌐',
+    'Phone bill': '📞',
+    'Postage': '📮',
+    'Software': '💻',
+    'Cloud services': '☁️',
+    'Digital assets': '💾',
+    'Stocks & ETFs': '📈',
+    'Mutual funds': '💰',
+    'Bonds': '📊',
+    'Retirement contributions': '🏦',
+    'Bank charges': '🏧',
+    'Professional fees': '⚖️',
+    'Child support': '👨‍👩‍👧',
+    'Fines': '🚫',
+    'Taxes': '🧾',
+    'Loan interest': '🏦',
+    'Fees & taxes': '🧾',
+    'Base salary': '💵',
+    'Overtime': '⏰',
+    'Bonus': '🎉',
+    'Commission': '💼',
+    'Allowance': '🪙',
+    'Advance payment': '⏳',
+    'Outstanding payment': '📋',
+    'Reimbursement': '🔁',
+    'Refund on bills': '↩️',
+    'Pending invoice': '🧾',
+    'Savings interest': '🏦',
+    'Deposit interest': '🏧',
+    'Fixed deposit': '🔐',
+    'Bond interest': '📄',
+    'Stock dividends': '📊',
+    'Fund distributions': '🤲',
+    'Cash dividends': '💵',
+    'Personal loan repayment': '🤝',
+    'Business loan repayment': '🏢',
+    'Partial repayment': '🪙',
+    'Property rent': '🏘',
+    'Equipment rent': '🚜',
+    'Shared room': '🛏',
+    'Parking space': '🅿',
+    'Personal items': '🛍',
+    'Business sales': '💼',
+    'Online sales': '🌐',
+    'Marketplace sale': '🏪',
+    'Cash gift': '💝',
+    'Gift card': '🎟',
+    'Family support': '👨‍👩‍👧',
+    'Celebration gift': '🎂',
+    'Purchase refund': '🛒',
+    'Gift voucher': '🎫',
+    'Other': '📦',
+  };
+  final match = map[name];
+  if (match != null) return match;
+
+  // Stable, deterministic fallback so distinct names still get distinct logos.
+  const palette = [
+    '🏷️', '🧾', '🛍️', '💊', '📦', '⚙️', '🧰', '🪙', '📌', '🔖',
+    '🧺', '🧴', '🔋', '📎', '🎯', '🧩', '🪛', '🧵', '🖇️', '🔭',
+  ];
+  return palette[name.hashCode.abs() % palette.length];
 }
 
 // Maps the known built-in icons to a stable string so they can be stored in
@@ -246,6 +377,7 @@ class CategorySelection {
 // One transaction row shown in recent activity.
 class TransactionItem {
   const TransactionItem({
+    this.id,
     required this.title,
     required this.subtitle,
     required this.amount,
@@ -257,6 +389,7 @@ class TransactionItem {
     this.createdAt,
   });
 
+  final String? id;
   final String title;
   final String subtitle;
   final double amount;
@@ -269,6 +402,7 @@ class TransactionItem {
 
   TransactionItem copyWith({String? categoryName, String? note}) =>
       TransactionItem(
+        id: id,
         title: title,
         subtitle: subtitle,
         amount: amount,
@@ -282,6 +416,7 @@ class TransactionItem {
 
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'title': title,
       'subtitle': subtitle,
       'amount': amount,
@@ -294,8 +429,9 @@ class TransactionItem {
     };
   }
 
-  factory TransactionItem.fromMap(Map<String, dynamic> data) {
+  factory TransactionItem.fromMap(String id, Map<String, dynamic> data) {
     return TransactionItem(
+      id: (data['id'] as String?) ?? id,
       title: (data['title'] as String?) ?? '',
       subtitle: (data['subtitle'] as String?) ?? '',
       amount: (data['amount'] as num?)?.toDouble() ?? 0,
@@ -325,6 +461,18 @@ extension RepeatFrequencyLabel on RepeatFrequency {
     RepeatFrequency.monthly => 'Monthly',
     RepeatFrequency.custom => 'Custom',
   };
+}
+
+// Realtime sync state of the user's Firestore data. Used to surface an
+// "offline" / "syncing" indicator so the user knows when writes are only stored
+// locally and will be pushed once the network returns.
+enum SyncStatus {
+  // Fully up to date with the server.
+  synced,
+  // Reading from the local cache because the server is unreachable.
+  offline,
+  // Connected to the server but with local writes still waiting to be pushed.
+  pending,
 }
 
 // Whether a debt is money you owe or money owed to you.
@@ -416,6 +564,7 @@ class ShoppingItem {
     this.isDone = false,
     this.price,
     this.completedAt,
+    this.createdAt,
   });
 
   final String id;
@@ -424,6 +573,7 @@ class ShoppingItem {
   final bool isDone;
   final double? price;
   final DateTime? completedAt;
+  final DateTime? createdAt;
 
   ShoppingItem copyWith({
     bool? isDone,
@@ -436,7 +586,39 @@ class ShoppingItem {
     isDone: isDone ?? this.isDone,
     price: price ?? this.price,
     completedAt: completedAt ?? this.completedAt,
+    createdAt: createdAt,
   );
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'subcategory': subcategory,
+      'isDone': isDone,
+      'price': price,
+      'completedAt': completedAt?.millisecondsSinceEpoch,
+      'createdAt': (createdAt ?? DateTime.now()).millisecondsSinceEpoch,
+    };
+  }
+
+  factory ShoppingItem.fromMap(String id, Map<String, dynamic> data) {
+    return ShoppingItem(
+      id: id,
+      name: (data['name'] as String?) ?? '',
+      subcategory: data['subcategory'] as String?,
+      isDone: (data['isDone'] as bool?) ?? false,
+      price: (data['price'] as num?)?.toDouble(),
+      completedAt: data['completedAt'] is num
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (data['completedAt'] as num).toInt(),
+            )
+          : null,
+      createdAt: data['createdAt'] is num
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (data['createdAt'] as num).toInt(),
+            )
+          : null,
+    );
+  }
 }
 
 // Upcoming scheduled payment card.

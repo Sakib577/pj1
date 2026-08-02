@@ -11,12 +11,14 @@ import 'package:pj1/pages/finance_tools_page.dart';
 import 'package:pj1/pages/planned_payments_page.dart';
 import 'package:pj1/pages/profile_page.dart';
 import 'package:pj1/pages/savings_page.dart';
+import 'package:pj1/pages/settings_page.dart';
 import 'package:pj1/pages/shopping_list_page.dart';
 import 'package:pj1/pages/transactions_page.dart';
 import 'package:pj1/state/finance_app_state.dart';
 import 'package:pj1/utils/currency_formatters.dart';
 import 'package:pj1/widgets/empty_state_card.dart';
 import 'package:pj1/widgets/planned_payment_card.dart';
+import 'package:pj1/widgets/transaction_actions.dart';
 import 'package:pj1/widgets/transaction_tile.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -48,7 +50,32 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _initUserData() async {
     await _appState.syncUserData();
     if (!mounted) return;
+    await _promptDefaultCurrencyIfNeeded();
     await _checkDuePayments();
+  }
+
+  bool _currencyPromptDone = false;
+
+  // First-run setup: if the signed-in account has no default currency stored
+  // yet, ask the user to pick one and save it to Firestore so later logins
+  // start with that currency.
+  Future<void> _promptDefaultCurrencyIfNeeded() async {
+    if (_currencyPromptDone) return;
+    _currencyPromptDone = true;
+    if (!_appState.currencyNeedsSetup) return;
+    try {
+      await _appState.ensureCurrencyAvailable();
+    } catch (_) {}
+    if (!mounted) return;
+    final code = await showCurrencyPicker(
+      context,
+      codes: _appState.availableCurrencyCodes,
+      selectedCode: _appState.currencyCode,
+    );
+    if (!mounted) return;
+    // Record the choice (or the current default if the user dismissed the
+    // picker) so the account is not asked again on every login.
+    _appState.changeCurrency(code ?? _appState.currencyCode);
   }
 
   // Prompts once per session for planned payments whose occurrence is due
@@ -62,7 +89,7 @@ class _DashboardPageState extends State<DashboardPage> {
     if (due.isEmpty) return;
 
     final messenger = ScaffoldMessenger.of(context);
-    final confirmed = await showDialog<bool>(
+    final action = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Payments due'),
@@ -93,17 +120,41 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
+            onPressed: () => Navigator.pop(dialogContext, 'skip'),
             child: const Text('Skip'),
           ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, 'delete'),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Color(0xFFDC2626)),
+            ),
+          ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
+            onPressed: () => Navigator.pop(dialogContext, 'confirm'),
             child: const Text('Confirm & record'),
           ),
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (!mounted || action == null || action == 'skip') return;
+
+    if (action == 'delete') {
+      for (final payment in due) {
+        _appState.removePlannedPayment(payment.id);
+      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            due.length == 1
+                ? 'Planned payment deleted'
+                : '${due.length} planned payments deleted',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
     for (final payment in due) {
       _appState.confirmPlannedPayment(payment.id);
@@ -256,10 +307,13 @@ class _DashboardPageState extends State<DashboardPage> {
               ]
             : null,
       ),
-      body: IndexedStack(
-        index: _navIndex,
-        // IndexedStack keeps non-visible tabs alive instead of rebuilding them.
+      body: Column(
         children: [
+          _SyncStatusBanner(status: appState.syncStatus),
+          Expanded(
+            child: IndexedStack(
+              index: _navIndex,
+              children: [
           SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             physics: const BouncingScrollPhysics(
@@ -296,7 +350,10 @@ class _DashboardPageState extends State<DashboardPage> {
                       .map(
                         (item) => Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: TransactionTile(item: item),
+                          child: TransactionTile(
+                            item: item,
+                            onTap: () => showTransactionActions(context, item),
+                          ),
                         ),
                       ),
                 const SizedBox(height: 12),
@@ -324,7 +381,11 @@ class _DashboardPageState extends State<DashboardPage> {
                       .map(
                         (payment) => Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: PlannedPaymentCard(payment: payment),
+                          child: PlannedPaymentCard(
+                            payment: payment,
+                            onTap: () =>
+                                showPlannedPaymentActions(context, payment),
+                          ),
                         ),
                       ),
                 const SizedBox(height: 24),
@@ -337,6 +398,9 @@ class _DashboardPageState extends State<DashboardPage> {
             goals: appState.savingsGoals,
           ),
           const ProfilePage(),
+          ],
+        ),
+        ),
         ],
       ),
       floatingActionButton: isHome
@@ -856,6 +920,46 @@ class _NavBarItem extends StatelessWidget {
               color: color,
               fontSize: 12,
               fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// A slim status strip shown at the top of the body when the user's records are
+// offline (served from the local cache) or have writes still waiting to sync.
+// Hidden entirely when fully synced so it never distracts the user.
+class _SyncStatusBanner extends StatelessWidget {
+  const _SyncStatusBanner({required this.status});
+
+  final SyncStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    if (status == SyncStatus.synced) return const SizedBox.shrink();
+
+    final offline = status == SyncStatus.offline;
+    return Container(
+      width: double.infinity,
+      color: offline ? const Color(0xFFFFF7ED) : const Color(0xFFFFFCE8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            offline ? Icons.cloud_off_rounded : Icons.cloud_sync_outlined,
+            size: 16,
+            color: offline ? const Color(0xFFF97316) : const Color(0xFFCA8A04),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            offline ? 'Offline — changes saved locally' : 'Syncing…',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: offline ? const Color(0xFFF97316) : const Color(0xFFCA8A04),
             ),
           ),
         ],

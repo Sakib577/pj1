@@ -274,6 +274,7 @@ class _AddShoppingItemPageState extends State<AddShoppingItemPage> {
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         name: trimmed,
         subcategory: subcategory.isEmpty ? null : subcategory,
+        createdAt: DateTime.now(),
       ),
     );
     Navigator.of(context).pop(true);

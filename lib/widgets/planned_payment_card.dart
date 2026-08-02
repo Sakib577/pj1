@@ -8,10 +8,12 @@ class PlannedPaymentCard extends StatelessWidget {
     super.key,
     required this.payment,
     this.onDelete,
+    this.onTap,
   });
 
   final PlannedPayment payment;
   final VoidCallback? onDelete;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +30,10 @@ class PlannedPaymentCard extends StatelessWidget {
         ? const Color(0xFFF59E0B)
         : const Color(0xFF6B7280);
 
-    return Container(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -138,6 +143,7 @@ class PlannedPaymentCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
       ),
     );
   }

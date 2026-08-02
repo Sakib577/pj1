@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/finance_models.dart';
 import '../state/finance_app_state.dart';
+import 'category_detail_page.dart';
 
 enum _CategoryPageMenuAction { expense, income }
 
@@ -138,41 +139,15 @@ class _CategoriesPageState extends State<CategoriesPage> {
     FinanceAppState state,
     ExpenseCategory category,
   ) async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Add to ${category.name}'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            labelText: 'Subcategory name',
-            hintText: 'e.g. Bakery',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('Add'),
-          ),
-        ],
-      ),
+    final result = await promptSubCategoryLogo(context);
+    if (result == null) return;
+    final (name, emoji) = result;
+    await state.addSubcategory(
+      categoryId: category.id,
+      name: name,
+      emoji: emoji,
+      isIncome: _isIncome,
     );
-    controller.dispose();
-    if (name != null && name.isNotEmpty) {
-      await state.addSubcategory(
-        categoryId: category.id,
-        name: name,
-        isIncome: _isIncome,
-      );
-    }
   }
 
   Future<void> _deleteCategory(
@@ -349,6 +324,10 @@ class _CategoryCard extends StatelessWidget {
                 for (final subcategory in category.subcategories)
                   onSelect == null
                       ? Chip(
+                          avatar: Text(
+                            subcategoryEmoji(category, subcategory),
+                            style: const TextStyle(fontSize: 15),
+                          ),
                           label: Text(subcategory),
                           backgroundColor: const Color(0xFFFFF4E8),
                           side: BorderSide.none,
@@ -370,6 +349,10 @@ class _CategoryCard extends StatelessWidget {
                               : null,
                         )
                       : ActionChip(
+                          avatar: Text(
+                            subcategoryEmoji(category, subcategory),
+                            style: const TextStyle(fontSize: 15),
+                          ),
                           label: Text(subcategory),
                           backgroundColor: const Color(0xFFFFF4E8),
                           side: BorderSide.none,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../state/finance_app_state.dart';
 import '../widgets/empty_state_card.dart';
+import '../widgets/transaction_actions.dart';
 import '../widgets/transaction_tile.dart';
 
 class TransactionsPage extends StatefulWidget {
@@ -90,7 +91,10 @@ class _TransactionsPageState extends State<TransactionsPage> {
                       for (final item in transactions)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: TransactionTile(item: item),
+                          child: TransactionTile(
+                            item: item,
+                            onTap: () => showTransactionActions(context, item),
+                          ),
                         ),
                     ],
                   ),

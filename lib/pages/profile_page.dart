@@ -3,7 +3,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import '../state/finance_app_state.dart';
-import '../utils/currency_formatters.dart';
 import 'settings_page.dart';
 
 class ProfilePage extends StatelessWidget {
@@ -11,7 +10,6 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appState = FinanceAppScope.of(context);
     final user = Firebase.apps.isEmpty
         ? null
         : FirebaseAuth.instance.currentUser;
@@ -64,31 +62,6 @@ class ProfilePage extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ProfileStat(
-                        label: 'Balance',
-                        value: formatCurrency(appState.currentBalance),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _ProfileStat(
-                        label: 'Income',
-                        value: formatCurrency(appState.monthlyIncome),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _ProfileStat(
-                        label: 'Expenses',
-                        value: formatCurrency(appState.monthlyExpenses),
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
@@ -110,19 +83,27 @@ class ProfilePage extends StatelessWidget {
             icon: Icons.lock_outline,
             title: 'Privacy',
             subtitle: 'Control your account security',
-            onTap: () => _showMessage(context, 'Privacy settings opened'),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const PrivacyPage())),
           ),
           _ProfileActionTile(
             icon: Icons.notifications_none,
             title: 'Notifications',
             subtitle: 'Manage spending alerts',
-            onTap: () => _showMessage(context, 'Notifications settings opened'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const NotificationSettingsPage(),
+              ),
+            ),
           ),
           _ProfileActionTile(
             icon: Icons.help_outline,
             title: 'Help & Support',
             subtitle: 'Get help with the app',
-            onTap: () => _showMessage(context, 'Support opened'),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const HelpSupportPage())),
           ),
           const SizedBox(height: 18),
           SizedBox(
@@ -166,40 +147,110 @@ class ProfilePage extends StatelessWidget {
   }
 }
 
-class _ProfileStat extends StatelessWidget {
-  const _ProfileStat({required this.label, required this.value});
-
-  final String label;
-  final String value;
+class NotificationSettingsPage extends StatelessWidget {
+  const NotificationSettingsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final state = FinanceAppScope.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Notifications')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF6B7280),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
+          const Text(
+            'Alerts',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            value: state.paymentNotificationsEnabled,
+            onChanged: state.setPaymentNotificationsEnabled,
+            title: const Text('Planned payment reminders'),
+            subtitle: const Text('Remind me when a payment is due.'),
+          ),
+          SwitchListTile(
+            value: state.budgetNotificationsEnabled,
+            onChanged: state.setBudgetNotificationsEnabled,
+            title: const Text('Budget alerts'),
+            subtitle: const Text('Alert me when spending approaches a limit.'),
           ),
         ],
       ),
     );
   }
+}
+
+class PrivacyPage extends StatelessWidget {
+  const PrivacyPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = FinanceAppScope.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Privacy')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text(
+            'Security',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            value: state.biometricLockEnabled,
+            onChanged: state.setBiometricLockEnabled,
+            title: const Text('App lock'),
+            subtitle: const Text(
+              'Require device authentication to open the app.',
+            ),
+          ),
+          const ListTile(
+            leading: Icon(Icons.cloud_done_outlined),
+            title: Text('Private cloud sync'),
+            subtitle: Text(
+              'Your synced data is only accessible to your verified account.',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HelpSupportPage extends StatelessWidget {
+  const HelpSupportPage({super.key});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Help & Support')),
+    body: ListView(
+      padding: const EdgeInsets.all(20),
+      children: const [
+        ListTile(
+          leading: Icon(Icons.menu_book_outlined),
+          title: Text('Getting started'),
+          subtitle: Text(
+            'Add transactions, create budgets, and set savings goals.',
+          ),
+        ),
+        ListTile(
+          leading: Icon(Icons.sync_outlined),
+          title: Text('Sync and offline use'),
+          subtitle: Text(
+            'Changes are stored on this device and synced when you reconnect.',
+          ),
+        ),
+        ListTile(
+          leading: Icon(Icons.email_outlined),
+          title: Text('Contact support'),
+          subtitle: Text(
+            'Email support from the account registered with this app.',
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ProfileActionTile extends StatelessWidget {

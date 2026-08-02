@@ -124,8 +124,9 @@ class ExpenseCategory {
         data['userDefinedSubcategories'] as List? ?? const [],
       ),
       subcategoryEmojis: Map<String, String>.from(
-        (data['subcategoryEmojis'] as Map? ?? const {})
-            .map((key, value) => MapEntry(key.toString(), value.toString())),
+        (data['subcategoryEmojis'] as Map? ?? const {}).map(
+          (key, value) => MapEntry(key.toString(), value.toString()),
+        ),
       ),
       sortOrder: (data['sortOrder'] as int?) ?? 0,
     );
@@ -384,8 +385,26 @@ String defaultSubcategoryEmoji(String name) {
 
   // Stable, deterministic fallback so distinct names still get distinct logos.
   const palette = [
-    '🏷️', '🧾', '🛍️', '💊', '📦', '⚙️', '🧰', '🪙', '📌', '🔖',
-    '🧺', '🧴', '🔋', '📎', '🎯', '🧩', '🪛', '🧵', '🖇️', '🔭',
+    '🏷️',
+    '🧾',
+    '🛍️',
+    '💊',
+    '📦',
+    '⚙️',
+    '🧰',
+    '🪙',
+    '📌',
+    '🔖',
+    '🧺',
+    '🧴',
+    '🔋',
+    '📎',
+    '🎯',
+    '🧩',
+    '🪛',
+    '🧵',
+    '🖇️',
+    '🔭',
   ];
   return palette[name.hashCode.abs() % palette.length];
 }
@@ -574,11 +593,8 @@ class TransactionItem {
       title: (data['title'] as String?) ?? '',
       subtitle: (data['subtitle'] as String?) ?? '',
       amount: (data['amount'] as num?)?.toDouble() ?? 0,
-      icon: iconFromName(data['iconName'] as String?) ??
-          Icons.category_rounded,
-      iconColor: Color(
-        (data['iconColor'] as num?)?.toInt() ?? 0xFFF97316,
-      ),
+      icon: iconFromName(data['iconName'] as String?) ?? Icons.category_rounded,
+      iconColor: Color((data['iconColor'] as num?)?.toInt() ?? 0xFFF97316),
       categoryName: (data['categoryName'] as String?) ?? '',
       note: data['note'] as String?,
       negative: (data['negative'] as bool?) ?? true,
@@ -637,6 +653,8 @@ class DebtItem {
     this.type = DebtType.borrowed,
     this.settlement = DebtSettlement.active,
     this.note,
+    this.creationTransactionId,
+    this.repaymentTransactionId,
     required this.createdAt,
   });
 
@@ -646,18 +664,28 @@ class DebtItem {
   final DebtType type;
   final DebtSettlement settlement;
   final String? note;
+  final String? creationTransactionId;
+  final String? repaymentTransactionId;
   final DateTime createdAt;
 
   bool get isClosed => settlement != DebtSettlement.active;
   bool get isRepaid => settlement == DebtSettlement.repaid;
 
-  DebtItem copyWith({DebtSettlement? settlement}) => DebtItem(
+  DebtItem copyWith({
+    DebtSettlement? settlement,
+    String? repaymentTransactionId,
+    bool clearRepaymentTransactionId = false,
+  }) => DebtItem(
     id: id,
     person: person,
     amount: amount,
     type: type,
     settlement: settlement ?? this.settlement,
     note: note,
+    creationTransactionId: creationTransactionId,
+    repaymentTransactionId: clearRepaymentTransactionId
+        ? null
+        : repaymentTransactionId ?? this.repaymentTransactionId,
     createdAt: createdAt,
   );
 
@@ -668,6 +696,8 @@ class DebtItem {
       'type': type.name,
       'settlement': settlement.name,
       'note': note,
+      'creationTransactionId': creationTransactionId,
+      'repaymentTransactionId': repaymentTransactionId,
       'createdAt': createdAt.millisecondsSinceEpoch,
     };
   }
@@ -686,6 +716,8 @@ class DebtItem {
         orElse: () => DebtSettlement.active,
       ),
       note: data['note'] as String?,
+      creationTransactionId: data['creationTransactionId'] as String?,
+      repaymentTransactionId: data['repaymentTransactionId'] as String?,
       createdAt: DateTime.fromMillisecondsSinceEpoch(
         (data['createdAt'] as num?)?.toInt() ?? 0,
       ),
@@ -714,19 +746,16 @@ class ShoppingItem {
   final DateTime? completedAt;
   final DateTime? createdAt;
 
-  ShoppingItem copyWith({
-    bool? isDone,
-    double? price,
-    DateTime? completedAt,
-  }) => ShoppingItem(
-    id: id,
-    name: name,
-    subcategory: subcategory,
-    isDone: isDone ?? this.isDone,
-    price: price ?? this.price,
-    completedAt: completedAt ?? this.completedAt,
-    createdAt: createdAt,
-  );
+  ShoppingItem copyWith({bool? isDone, double? price, DateTime? completedAt}) =>
+      ShoppingItem(
+        id: id,
+        name: name,
+        subcategory: subcategory,
+        isDone: isDone ?? this.isDone,
+        price: price ?? this.price,
+        completedAt: completedAt ?? this.completedAt,
+        createdAt: createdAt,
+      );
 
   Map<String, dynamic> toMap() {
     return {
@@ -798,25 +827,23 @@ class PlannedPayment {
   // same occurrence.
   final DateTime? lastConfirmedDate;
 
-  PlannedPayment copyWith({
-    DateTime? createdAt,
-    DateTime? lastConfirmedDate,
-  }) => PlannedPayment(
-    id: id,
-    title: title,
-    amount: amount,
-    icon: icon,
-    iconColor: iconColor,
-    categoryName: categoryName,
-    emoji: emoji,
-    subcategory: subcategory,
-    isIncome: isIncome,
-    repeat: repeat,
-    customEveryDays: customEveryDays,
-    startDate: startDate,
-    createdAt: createdAt ?? this.createdAt,
-    lastConfirmedDate: lastConfirmedDate ?? this.lastConfirmedDate,
-  );
+  PlannedPayment copyWith({DateTime? createdAt, DateTime? lastConfirmedDate}) =>
+      PlannedPayment(
+        id: id,
+        title: title,
+        amount: amount,
+        icon: icon,
+        iconColor: iconColor,
+        categoryName: categoryName,
+        emoji: emoji,
+        subcategory: subcategory,
+        isIncome: isIncome,
+        repeat: repeat,
+        customEveryDays: customEveryDays,
+        startDate: startDate,
+        createdAt: createdAt ?? this.createdAt,
+        lastConfirmedDate: lastConfirmedDate ?? this.lastConfirmedDate,
+      );
 
   Map<String, dynamic> toMap() {
     return {
@@ -841,11 +868,8 @@ class PlannedPayment {
       id: id,
       title: (data['title'] as String?) ?? '',
       amount: (data['amount'] as num?)?.toDouble() ?? 0,
-      icon: iconFromName(data['iconName'] as String?) ??
-          Icons.category_rounded,
-      iconColor: Color(
-        (data['iconColor'] as num?)?.toInt() ?? 0xFFF97316,
-      ),
+      icon: iconFromName(data['iconName'] as String?) ?? Icons.category_rounded,
+      iconColor: Color((data['iconColor'] as num?)?.toInt() ?? 0xFFF97316),
       categoryName: (data['categoryName'] as String?) ?? '',
       emoji: data['emoji'] as String?,
       subcategory: data['subcategory'] as String?,
@@ -937,6 +961,7 @@ class PlannedPayment {
 // Budget item for a single spending category.
 class BudgetCategory {
   const BudgetCategory({
+    required this.id,
     required this.label,
     required this.spent,
     required this.limit,
@@ -947,6 +972,7 @@ class BudgetCategory {
     required this.iconBg,
   });
 
+  final String id;
   final String label;
   final double spent;
   final double limit;
@@ -955,6 +981,32 @@ class BudgetCategory {
   final Color statusColor;
   final IconData icon;
   final Color iconBg;
+
+  BudgetCategory copyWith({double? spent}) => BudgetCategory(
+    id: id,
+    label: label,
+    spent: spent ?? this.spent,
+    limit: limit,
+    daysLeft: daysLeft,
+    status: status,
+    statusColor: statusColor,
+    icon: icon,
+    iconBg: iconBg,
+  );
+
+  Map<String, dynamic> toMap() => {'label': label, 'limit': limit};
+  factory BudgetCategory.fromMap(String id, Map<String, dynamic> data) =>
+      BudgetCategory(
+        id: id,
+        label: (data['label'] as String?) ?? 'Budget',
+        limit: (data['limit'] as num?)?.toDouble() ?? 0,
+        spent: 0,
+        daysLeft: 0,
+        status: 'Healthy',
+        statusColor: const Color(0xFF16A34A),
+        icon: Icons.account_balance_wallet_outlined,
+        iconBg: const Color(0xFFFFF4E8),
+      );
 }
 
 // Overall savings section summary.
@@ -973,6 +1025,7 @@ class SavingsOverview {
 // One savings goal card with progress and status.
 class SavingsGoal {
   const SavingsGoal({
+    required this.id,
     required this.title,
     required this.subtitle,
     required this.current,
@@ -985,6 +1038,7 @@ class SavingsGoal {
     required this.statusBg,
   });
 
+  final String id;
   final String title;
   final String subtitle;
   final double current;
@@ -995,4 +1049,32 @@ class SavingsGoal {
   final String status;
   final Color statusColor;
   final Color statusBg;
+
+  SavingsGoal copyWith({double? current}) =>
+      SavingsGoal.fromMap(id, {...toMap(), 'current': current ?? this.current});
+
+  Map<String, dynamic> toMap() => {
+    'title': title,
+    'subtitle': subtitle,
+    'current': current,
+    'target': target,
+  };
+  factory SavingsGoal.fromMap(String id, Map<String, dynamic> data) {
+    final current = (data['current'] as num?)?.toDouble() ?? 0;
+    final target = (data['target'] as num?)?.toDouble() ?? 0;
+    final complete = target > 0 && current >= target;
+    return SavingsGoal(
+      id: id,
+      title: (data['title'] as String?) ?? 'Savings goal',
+      subtitle: (data['subtitle'] as String?) ?? '',
+      current: current,
+      target: target,
+      icon: Icons.savings_outlined,
+      iconColor: const Color(0xFFF59E0B),
+      iconBg: const Color(0xFFFFF4E8),
+      status: complete ? 'Complete' : 'In progress',
+      statusColor: complete ? const Color(0xFF16A34A) : const Color(0xFFB45309),
+      statusBg: complete ? const Color(0xFFDCFCE7) : const Color(0xFFFFF4E8),
+    );
+  }
 }

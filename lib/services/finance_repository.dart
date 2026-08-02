@@ -10,24 +10,28 @@ class FinanceRepository {
 
   final FirebaseFirestore _firestore;
 
-  DocumentReference<Map<String, dynamic>> _doc(String uid, String kind, String id) {
-    return _firestore
-        .collection('users')
-        .doc(uid)
-        .collection(kind)
-        .doc(id);
+  DocumentReference<Map<String, dynamic>> _doc(
+    String uid,
+    String kind,
+    String id,
+  ) {
+    return _firestore.collection('users').doc(uid).collection(kind).doc(id);
   }
 
-  CollectionReference<Map<String, dynamic>> _collection(String uid, String kind) {
+  CollectionReference<Map<String, dynamic>> _collection(
+    String uid,
+    String kind,
+  ) {
     return _firestore.collection('users').doc(uid).collection(kind);
   }
 
   // --- Transactions ---
 
   Future<List<TransactionItem>> loadTransactions(String uid) async {
-    final snapshot = await _collection(uid, 'transactions').get(
-      const GetOptions(source: Source.serverAndCache),
-    );
+    final snapshot = await _collection(
+      uid,
+      'transactions',
+    ).get(const GetOptions(source: Source.serverAndCache));
     return snapshot.docs
         .map((doc) => TransactionItem.fromMap(doc.id, doc.data()))
         .toList();
@@ -46,17 +50,19 @@ class FinanceRepository {
   // writes still waiting to be pushed. includeMetadataChanges is required so
   // the stream fires when only the metadata (pending/from-cache flags) changes.
   Stream<SyncStatus> watchSyncStatus(String uid) {
-    return _collection(uid, 'transactions')
-        .snapshots(includeMetadataChanges: true)
-        .map((snapshot) {
-          if (snapshot.metadata.isFromCache) return SyncStatus.offline;
-          if (snapshot.metadata.hasPendingWrites) return SyncStatus.pending;
-          return SyncStatus.synced;
-        });
+    return _collection(
+      uid,
+      'transactions',
+    ).snapshots(includeMetadataChanges: true).map((snapshot) {
+      if (snapshot.metadata.isFromCache) return SyncStatus.offline;
+      if (snapshot.metadata.hasPendingWrites) return SyncStatus.pending;
+      return SyncStatus.synced;
+    });
   }
 
   Future<void> saveTransaction(String uid, TransactionItem transaction) async {
-    final id = transaction.id ??
+    final id =
+        transaction.id ??
         transaction.createdAt?.microsecondsSinceEpoch.toString() ??
         DateTime.now().microsecondsSinceEpoch.toString();
     await _doc(uid, 'transactions', id).set(transaction.toMap());
@@ -77,9 +83,10 @@ class FinanceRepository {
   // --- Planned payments ---
 
   Future<List<PlannedPayment>> loadPlannedPayments(String uid) async {
-    final snapshot = await _collection(uid, 'planned_payments').get(
-      const GetOptions(source: Source.serverAndCache),
-    );
+    final snapshot = await _collection(
+      uid,
+      'planned_payments',
+    ).get(const GetOptions(source: Source.serverAndCache));
     return snapshot.docs
         .map((doc) => PlannedPayment.fromMap(doc.id, doc.data()))
         .toList();
@@ -104,9 +111,10 @@ class FinanceRepository {
   // --- Debts ---
 
   Future<List<DebtItem>> loadDebts(String uid) async {
-    final snapshot = await _collection(uid, 'debts').get(
-      const GetOptions(source: Source.serverAndCache),
-    );
+    final snapshot = await _collection(
+      uid,
+      'debts',
+    ).get(const GetOptions(source: Source.serverAndCache));
     return snapshot.docs
         .map((doc) => DebtItem.fromMap(doc.id, doc.data()))
         .toList();
@@ -131,9 +139,10 @@ class FinanceRepository {
   // --- Shopping items ---
 
   Future<List<ShoppingItem>> loadShoppingItems(String uid) async {
-    final snapshot = await _collection(uid, 'shopping_items').get(
-      const GetOptions(source: Source.serverAndCache),
-    );
+    final snapshot = await _collection(
+      uid,
+      'shopping_items',
+    ).get(const GetOptions(source: Source.serverAndCache));
     return snapshot.docs
         .map((doc) => ShoppingItem.fromMap(doc.id, doc.data()))
         .toList();
@@ -155,6 +164,36 @@ class FinanceRepository {
     await _doc(uid, 'shopping_items', id).delete();
   }
 
+  Future<List<BudgetCategory>> loadBudgets(String uid) async =>
+      (await _collection(uid, 'budgets').get()).docs
+          .map((doc) => BudgetCategory.fromMap(doc.id, doc.data()))
+          .toList();
+  Stream<List<BudgetCategory>> watchBudgets(String uid) =>
+      _collection(uid, 'budgets').snapshots().map(
+        (snapshot) => snapshot.docs
+            .map((doc) => BudgetCategory.fromMap(doc.id, doc.data()))
+            .toList(),
+      );
+  Future<void> saveBudget(String uid, BudgetCategory item) =>
+      _doc(uid, 'budgets', item.id).set(item.toMap());
+  Future<void> deleteBudget(String uid, String id) =>
+      _doc(uid, 'budgets', id).delete();
+
+  Future<List<SavingsGoal>> loadSavingsGoals(String uid) async =>
+      (await _collection(uid, 'savings_goals').get()).docs
+          .map((doc) => SavingsGoal.fromMap(doc.id, doc.data()))
+          .toList();
+  Stream<List<SavingsGoal>> watchSavingsGoals(String uid) =>
+      _collection(uid, 'savings_goals').snapshots().map(
+        (snapshot) => snapshot.docs
+            .map((doc) => SavingsGoal.fromMap(doc.id, doc.data()))
+            .toList(),
+      );
+  Future<void> saveSavingsGoal(String uid, SavingsGoal item) =>
+      _doc(uid, 'savings_goals', item.id).set(item.toMap());
+  Future<void> deleteSavingsGoal(String uid, String id) =>
+      _doc(uid, 'savings_goals', id).delete();
+
   // --- Currency settings ---
 
   Future<String?> loadCurrency(String uid) async {
@@ -165,5 +204,20 @@ class FinanceRepository {
 
   Future<void> saveCurrency(String uid, String code) async {
     await _doc(uid, 'settings', 'currency').set({'code': code});
+  }
+
+  // --- Account preferences ---
+
+  Future<Map<String, dynamic>> loadPreferences(String uid) async {
+    final doc = await _doc(uid, 'settings', 'preferences').get();
+    return doc.data() ?? const {};
+  }
+
+  Future<void> savePreferences(String uid, Map<String, dynamic> values) async {
+    await _doc(
+      uid,
+      'settings',
+      'preferences',
+    ).set(values, SetOptions(merge: true));
   }
 }

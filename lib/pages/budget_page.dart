@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/finance_models.dart';
+import '../state/finance_app_state.dart';
 import '../utils/currency_formatters.dart';
 
 class BudgetPage extends StatelessWidget {
@@ -35,14 +36,7 @@ class BudgetPage extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Create New Budget tapped'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
+                onPressed: () => _createBudget(context),
                 icon: const Icon(Icons.add_circle_outline),
                 label: const Text('Create New Budget'),
                 style: ElevatedButton.styleFrom(
@@ -56,16 +50,17 @@ class BudgetPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
-            const _BudgetSectionHeader(
-              title: 'Categories',
-              trailing: 'View All',
-            ),
+            _BudgetSectionHeader(title: 'Categories', trailing: null),
             const SizedBox(height: 12),
             if (budgets.isEmpty)
               const _BudgetEmptyState()
             else
               for (final b in budgets) ...[
-                _BudgetCategoryCard(item: b),
+                _BudgetCategoryCard(
+                  item: b,
+                  onDelete: () =>
+                      FinanceAppScope.of(context).deleteBudget(b.id),
+                ),
                 const SizedBox(height: 12),
               ],
             const SizedBox(height: 12),
@@ -73,6 +68,52 @@ class BudgetPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _createBudget(BuildContext context) async {
+    final name = TextEditingController();
+    final limit = TextEditingController();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Create budget'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: name,
+              decoration: const InputDecoration(labelText: 'Category name'),
+            ),
+            TextField(
+              controller: limit,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: 'Monthly limit'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final amount = double.tryParse(limit.text.trim()) ?? 0;
+    if (saved == true &&
+        name.text.trim().isNotEmpty &&
+        amount > 0 &&
+        context.mounted) {
+      FinanceAppScope.of(context).addBudget(name.text.trim(), amount);
+    }
+    name.dispose();
+    limit.dispose();
   }
 }
 
@@ -232,8 +273,9 @@ class _BudgetSummaryCard extends StatelessWidget {
 }
 
 class _BudgetCategoryCard extends StatelessWidget {
-  const _BudgetCategoryCard({required this.item});
+  const _BudgetCategoryCard({required this.item, required this.onDelete});
   final BudgetCategory item;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -260,6 +302,13 @@ class _BudgetCategoryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Align(
+            alignment: Alignment.topRight,
+            child: IconButton(
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+            ),
+          ),
           Row(
             children: [
               Container(

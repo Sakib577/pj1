@@ -41,9 +41,18 @@ class FinanceAppState extends ChangeNotifier {
   StreamSubscription<List<PlannedPayment>>? _paymentSubscription;
   StreamSubscription<List<DebtItem>>? _debtSubscription;
   StreamSubscription<List<ShoppingItem>>? _shoppingSubscription;
+  StreamSubscription<List<BudgetCategory>>? _budgetSubscription;
+  StreamSubscription<List<SavingsGoal>>? _goalSubscription;
   bool _notifyScheduled = false;
   bool _currencyNeedsSetup = false;
   SyncStatus _syncStatus = SyncStatus.synced;
+  bool _paymentNotificationsEnabled = true;
+  bool _budgetNotificationsEnabled = true;
+  bool _biometricLockEnabled = false;
+
+  bool get paymentNotificationsEnabled => _paymentNotificationsEnabled;
+  bool get budgetNotificationsEnabled => _budgetNotificationsEnabled;
+  bool get biometricLockEnabled => _biometricLockEnabled;
 
   // Whether the user's records are currently offline, syncing, or synced. Lets
   // the UI show a banner so the user knows edits are stored locally for now.
@@ -188,9 +197,18 @@ class FinanceAppState extends ChangeNotifier {
   List<DebtItem> get debts => List.unmodifiable(_debts);
 
   void addDebt(DebtItem debt) {
+    final transactionId = _recordDebtTransaction(debt, repayment: false);
+    debt = DebtItem(
+      id: debt.id,
+      person: debt.person,
+      amount: debt.amount,
+      type: debt.type,
+      settlement: debt.settlement,
+      note: debt.note,
+      createdAt: debt.createdAt,
+      creationTransactionId: transactionId,
+    );
     _debts.insert(0, debt);
-    // Borrowing brings money in; lending puts money out.
-    _adjustDebtBalance(debt.amount, debt.type, 1);
     notifyListeners();
     unawaited(_write((uid) => _financeRepository.saveDebt(uid, debt)));
   }
@@ -205,8 +223,10 @@ class FinanceAppState extends ChangeNotifier {
     } else {
       _debts[index] = debt.copyWith(settlement: DebtSettlement.active);
       if (debt.settlement == DebtSettlement.repaid) {
-        // Reopening a repaid debt undoes the repayment money movement.
-        _adjustDebtBalance(debt.amount, debt.type, 1);
+        _deleteLinkedTransaction(debt.repaymentTransactionId);
+        _debts[index] = _debts[index].copyWith(
+          clearRepaymentTransactionId: true,
+        );
       }
     }
     notifyListeners();
@@ -218,10 +238,14 @@ class FinanceAppState extends ChangeNotifier {
     if (index == -1) return;
     final debt = _debts[index];
     if (debt.settlement != DebtSettlement.active) return;
-    // Repaying reverses the original money movement: borrowed pays back out,
-    // lent money comes back in.
-    _adjustDebtBalance(debt.amount, debt.type, -1);
-    _debts[index] = debt.copyWith(settlement: DebtSettlement.repaid);
+    final repaymentTransactionId = _recordDebtTransaction(
+      debt,
+      repayment: true,
+    );
+    _debts[index] = debt.copyWith(
+      settlement: DebtSettlement.repaid,
+      repaymentTransactionId: repaymentTransactionId,
+    );
     notifyListeners();
     unawaited(_write((uid) => _financeRepository.saveDebt(uid, _debts[index])));
   }
@@ -231,10 +255,8 @@ class FinanceAppState extends ChangeNotifier {
     if (index == -1) return;
     final debt = _debts[index];
     _debts.removeAt(index);
-    if (debt.settlement != DebtSettlement.repaid) {
-      // Repaid debts have zero net balance effect, so nothing to undo.
-      _adjustDebtBalance(debt.amount, debt.type, -1);
-    }
+    _deleteLinkedTransaction(debt.creationTransactionId);
+    _deleteLinkedTransaction(debt.repaymentTransactionId);
     notifyListeners();
     unawaited(_write((uid) => _financeRepository.deleteDebt(uid, id)));
   }
@@ -242,7 +264,9 @@ class FinanceAppState extends ChangeNotifier {
   // Re-schedules Android reminders to match the current planned payments.
   void _syncReminders() {
     unawaited(
-      PaymentReminderService.instance.scheduleReminders(_plannedPayments),
+      PaymentReminderService.instance.scheduleReminders(
+        _paymentNotificationsEnabled ? _plannedPayments : const [],
+      ),
     );
   }
 
@@ -256,10 +280,42 @@ class FinanceAppState extends ChangeNotifier {
     } catch (_) {}
   }
 
-  // sign 1 = borrowed adds money / lent takes money out (creation).
-  // sign -1 = borrowed pays back out / lent money comes back in (repayment).
-  void _adjustDebtBalance(double amount, DebtType type, int sign) {
-    _balance += sign * (type == DebtType.borrowed ? amount : -amount);
+  String _recordDebtTransaction(DebtItem debt, {required bool repayment}) {
+    final now = DateTime.now();
+    final id =
+        'debt-${debt.id}-${repayment ? 'repaid' : 'created'}-${now.microsecondsSinceEpoch}';
+    final isIncome = repayment
+        ? debt.type == DebtType.lent
+        : debt.type == DebtType.borrowed;
+    final item = TransactionItem(
+      id: id,
+      title: repayment
+          ? 'Debt repaid by ${debt.person}'
+          : debt.type == DebtType.borrowed
+          ? 'Borrowed from ${debt.person}'
+          : 'Lent to ${debt.person}',
+      subtitle: _buildSubtitle(now, debt.note),
+      amount: debt.amount,
+      icon: repayment
+          ? Icons.currency_exchange_rounded
+          : Icons.handshake_rounded,
+      iconColor: repayment ? const Color(0xFF22C55E) : const Color(0xFFF97316),
+      categoryName: 'Debt',
+      note: debt.note,
+      negative: !isIncome,
+      createdAt: now,
+    );
+    _transactions.insert(0, item);
+    _recomputeTotals();
+    unawaited(_write((uid) => _financeRepository.saveTransaction(uid, item)));
+    return id;
+  }
+
+  void _deleteLinkedTransaction(String? id) {
+    if (id == null || id.isEmpty) return;
+    _transactions.removeWhere((transaction) => transaction.id == id);
+    _recomputeTotals();
+    unawaited(_write((uid) => _financeRepository.deleteTransaction(uid, id)));
   }
 
   List<ShoppingItem> get shoppingItems => List.unmodifiable(_shoppingItems);
@@ -336,13 +392,85 @@ class FinanceAppState extends ChangeNotifier {
     }
   }
 
-  List<BudgetCategory> get budgets => List.unmodifiable(_budgets);
-  SavingsOverview get savingsOverview => const SavingsOverview(
-    totalSavings: 0,
-    progress: 0,
-    message: 'No savings goals yet.',
+  List<BudgetCategory> get budgets => List.unmodifiable(
+    _budgets.map((budget) {
+      final spent = _transactions
+          .where(
+            (transaction) =>
+                transaction.negative &&
+                transaction.categoryName == budget.label,
+          )
+          .fold<double>(0, (total, transaction) => total + transaction.amount);
+      return budget.copyWith(spent: spent);
+    }),
   );
+  SavingsOverview get savingsOverview {
+    final target = _goals.fold<double>(0, (total, goal) => total + goal.target);
+    final current = _goals.fold<double>(
+      0,
+      (total, goal) => total + goal.current,
+    );
+    return SavingsOverview(
+      totalSavings: current,
+      progress: target == 0 ? 0 : (current / target).clamp(0, 1),
+      message: _goals.isEmpty
+          ? 'No savings goals yet.'
+          : 'Keep building toward your goals.',
+    );
+  }
+
   List<SavingsGoal> get savingsGoals => List.unmodifiable(_goals);
+
+  void addBudget(String label, double limit) {
+    final item = BudgetCategory(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      label: label,
+      limit: limit,
+      spent: 0,
+      daysLeft: 0,
+      status: 'Healthy',
+      statusColor: const Color(0xFF16A34A),
+      icon: Icons.account_balance_wallet_outlined,
+      iconBg: const Color(0xFFFFF4E8),
+    );
+    _budgets.add(item);
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.saveBudget(uid, item)));
+  }
+
+  void deleteBudget(String id) {
+    _budgets.removeWhere((item) => item.id == id);
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.deleteBudget(uid, id)));
+  }
+
+  void addSavingsGoal(String title, double target) {
+    final item = SavingsGoal.fromMap(
+      DateTime.now().microsecondsSinceEpoch.toString(),
+      {'title': title, 'target': target, 'current': 0},
+    );
+    _goals.add(item);
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.saveSavingsGoal(uid, item)));
+  }
+
+  void deleteSavingsGoal(String id) {
+    _goals.removeWhere((item) => item.id == id);
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.deleteSavingsGoal(uid, id)));
+  }
+
+  void addSavingsContribution(String id, double amount) {
+    final index = _goals.indexWhere((goal) => goal.id == id);
+    if (index == -1 || amount <= 0) return;
+    _goals[index] = _goals[index].copyWith(
+      current: _goals[index].current + amount,
+    );
+    notifyListeners();
+    unawaited(
+      _write((uid) => _financeRepository.saveSavingsGoal(uid, _goals[index])),
+    );
+  }
 
   double get currentBalance => _balance;
   double get monthlyIncome => _income;
@@ -395,6 +523,8 @@ class FinanceAppState extends ChangeNotifier {
     _paymentSubscription?.cancel();
     _debtSubscription?.cancel();
     _shoppingSubscription?.cancel();
+    _budgetSubscription?.cancel();
+    _goalSubscription?.cancel();
     _syncStatusSubscription?.cancel();
     _expenseCategorySubscription = null;
     _incomeCategorySubscription = null;
@@ -403,6 +533,8 @@ class FinanceAppState extends ChangeNotifier {
     _paymentSubscription = null;
     _debtSubscription = null;
     _shoppingSubscription = null;
+    _budgetSubscription = null;
+    _goalSubscription = null;
     _initialLoad = null;
     _categorySyncReady = false;
   }
@@ -449,6 +581,16 @@ class FinanceAppState extends ChangeNotifier {
           );
       }
     } catch (_) {}
+    try {
+      _budgets
+        ..clear()
+        ..addAll(await _financeRepository.loadBudgets(uid));
+    } catch (_) {}
+    try {
+      _goals
+        ..clear()
+        ..addAll(await _financeRepository.loadSavingsGoals(uid));
+    } catch (_) {}
 
     try {
       final storedCurrency = await _financeRepository.loadCurrency(uid);
@@ -465,6 +607,16 @@ class FinanceAppState extends ChangeNotifier {
     } catch (_) {
       // Offline: keep the current currency and do not prompt.
     }
+
+    try {
+      final preferences = await _financeRepository.loadPreferences(uid);
+      _paymentNotificationsEnabled =
+          preferences['paymentNotificationsEnabled'] as bool? ?? true;
+      _budgetNotificationsEnabled =
+          preferences['budgetNotificationsEnabled'] as bool? ?? true;
+      _biometricLockEnabled =
+          preferences['biometricLockEnabled'] as bool? ?? false;
+    } catch (_) {}
 
     _recomputeTotals();
     _syncReminders();
@@ -519,10 +671,25 @@ class FinanceAppState extends ChangeNotifier {
         );
       notifyListeners();
     });
+    _budgetSubscription = _financeRepository.watchBudgets(uid).listen((items) {
+      _budgets
+        ..clear()
+        ..addAll(items);
+      notifyListeners();
+    });
+    _goalSubscription = _financeRepository.watchSavingsGoals(uid).listen((
+      items,
+    ) {
+      _goals
+        ..clear()
+        ..addAll(items);
+      notifyListeners();
+    });
   }
 
-  // Balance is derived from transactions plus the net effect of active or
-  // closed debts, so it can be rebuilt from persisted records after a restart.
+  // Balance is derived from transactions. Debt activity creates matching
+  // transactions, while a small legacy fallback preserves balances for debts
+  // created by versions before debt transactions were introduced.
   void _recomputeTotals() {
     var income = 0.0;
     var expenses = 0.0;
@@ -535,6 +702,7 @@ class FinanceAppState extends ChangeNotifier {
     }
     var debtContribution = 0.0;
     for (final debt in _debts) {
+      if (debt.creationTransactionId != null) continue;
       if (debt.settlement == DebtSettlement.repaid) continue;
       debtContribution += debt.type == DebtType.borrowed
           ? debt.amount
@@ -550,7 +718,12 @@ class FinanceAppState extends ChangeNotifier {
     _plannedPayments.clear();
     _debts.clear();
     _shoppingItems.clear();
+    _budgets.clear();
+    _goals.clear();
     _currencyNeedsSetup = false;
+    _paymentNotificationsEnabled = true;
+    _budgetNotificationsEnabled = true;
+    _biometricLockEnabled = false;
     _syncStatus = SyncStatus.synced;
     _recomputeTotals();
   }
@@ -644,6 +817,43 @@ class FinanceAppState extends ChangeNotifier {
     notifyListeners();
     unawaited(CurrencyPreferences.save(uid: _syncedUid));
     unawaited(_write((uid) => _financeRepository.saveCurrency(uid, code)));
+  }
+
+  void setPaymentNotificationsEnabled(bool value) {
+    _paymentNotificationsEnabled = value;
+    notifyListeners();
+    _syncReminders();
+    unawaited(
+      _write(
+        (uid) => _financeRepository.savePreferences(uid, {
+          'paymentNotificationsEnabled': value,
+        }),
+      ),
+    );
+  }
+
+  void setBudgetNotificationsEnabled(bool value) {
+    _budgetNotificationsEnabled = value;
+    notifyListeners();
+    unawaited(
+      _write(
+        (uid) => _financeRepository.savePreferences(uid, {
+          'budgetNotificationsEnabled': value,
+        }),
+      ),
+    );
+  }
+
+  void setBiometricLockEnabled(bool value) {
+    _biometricLockEnabled = value;
+    notifyListeners();
+    unawaited(
+      _write(
+        (uid) => _financeRepository.savePreferences(uid, {
+          'biometricLockEnabled': value,
+        }),
+      ),
+    );
   }
 
   // Loads the exchange-rate list if it has not been fetched yet, so a first-run

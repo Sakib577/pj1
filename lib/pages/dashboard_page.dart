@@ -277,10 +277,9 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   IconButton(
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Notifications tapped'),
-                          behavior: SnackBarBehavior.floating,
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationSettingsPage(),
                         ),
                       );
                     },

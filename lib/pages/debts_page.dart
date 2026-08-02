@@ -19,9 +19,9 @@ class _DebtsPageState extends State<DebtsPage> {
 
   Future<void> _openAddPage() async {
     final messenger = ScaffoldMessenger.of(context);
-    final added = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const AddDebtPage()),
-    );
+    final added = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const AddDebtPage()));
     if (added == true && mounted) {
       messenger.showSnackBar(
         const SnackBar(
@@ -37,8 +37,10 @@ class _DebtsPageState extends State<DebtsPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete debt?'),
-        content: Text('The ${debt.type.label.toLowerCase()} record with '
-            '${debt.person} will be removed.'),
+        content: Text(
+          'The ${debt.type.label.toLowerCase()} record with '
+          '${debt.person} will be removed.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -58,10 +60,12 @@ class _DebtsPageState extends State<DebtsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final all = FinanceAppScope.of(context).debts
-        .where((debt) => debt.isClosed == (_statusIndex == 1))
+    final all = FinanceAppScope.of(
+      context,
+    ).debts.where((debt) => debt.isClosed == (_statusIndex == 1)).toList();
+    final borrowed = all
+        .where((debt) => debt.type == DebtType.borrowed)
         .toList();
-    final borrowed = all.where((debt) => debt.type == DebtType.borrowed).toList();
     final lent = all.where((debt) => debt.type == DebtType.lent).toList();
 
     return Scaffold(
@@ -256,9 +260,7 @@ class _AddDebtPageState extends State<AddDebtPage> {
                       child: _SegmentButton(
                         label: 'Borrowed',
                         selected: _type == DebtType.borrowed,
-                        onTap: () => setState(
-                          () => _type = DebtType.borrowed,
-                        ),
+                        onTap: () => setState(() => _type = DebtType.borrowed),
                       ),
                     ),
                     const SizedBox(width: 8),

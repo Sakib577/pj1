@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/finance_models.dart';
+import '../state/finance_app_state.dart';
 import '../utils/currency_formatters.dart';
 
 class SavingsPage extends StatelessWidget {
@@ -25,14 +26,7 @@ class SavingsPage extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Create New Goal tapped'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
+                onPressed: () => _createGoal(context),
                 icon: const Icon(Icons.add_circle_outline),
                 label: const Text('Create New Goal'),
                 style: ElevatedButton.styleFrom(
@@ -76,7 +70,12 @@ class SavingsPage extends StatelessWidget {
               const _SavingsEmptyState()
             else
               for (final goal in goals) ...[
-                _SavingsGoalCard(goal: goal),
+                _SavingsGoalCard(
+                  goal: goal,
+                  onDelete: () =>
+                      FinanceAppScope.of(context).deleteSavingsGoal(goal.id),
+                  onAddFunds: () => _addFunds(context, goal),
+                ),
                 const SizedBox(height: 12),
               ],
             const SizedBox(height: 16),
@@ -84,6 +83,83 @@ class SavingsPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _createGoal(BuildContext context) async {
+    final title = TextEditingController();
+    final target = TextEditingController();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Create savings goal'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: title,
+              decoration: const InputDecoration(labelText: 'Goal name'),
+            ),
+            TextField(
+              controller: target,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: 'Target amount'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final amount = double.tryParse(target.text.trim()) ?? 0;
+    if (saved == true &&
+        title.text.trim().isNotEmpty &&
+        amount > 0 &&
+        context.mounted) {
+      FinanceAppScope.of(context).addSavingsGoal(title.text.trim(), amount);
+    }
+    title.dispose();
+    target.dispose();
+  }
+
+  Future<void> _addFunds(BuildContext context, SavingsGoal goal) async {
+    final amount = TextEditingController();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Add to ${goal.title}'),
+        content: TextField(
+          controller: amount,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: 'Amount'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    final value = double.tryParse(amount.text.trim()) ?? 0;
+    if (saved == true && value > 0 && context.mounted) {
+      FinanceAppScope.of(context).addSavingsContribution(goal.id, value);
+    }
+    amount.dispose();
   }
 }
 
@@ -202,9 +278,15 @@ class _SavingsProgressCard extends StatelessWidget {
 }
 
 class _SavingsGoalCard extends StatelessWidget {
-  const _SavingsGoalCard({required this.goal});
+  const _SavingsGoalCard({
+    required this.goal,
+    required this.onDelete,
+    required this.onAddFunds,
+  });
 
   final SavingsGoal goal;
+  final VoidCallback onDelete;
+  final VoidCallback onAddFunds;
 
   @override
   Widget build(BuildContext context) {
@@ -238,6 +320,13 @@ class _SavingsGoalCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(goal.icon, color: goal.iconColor, size: 30),
+              ),
+              IconButton(
+                onPressed: onDelete,
+                icon: const Icon(
+                  Icons.delete_outline,
+                  color: Color(0xFFDC2626),
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -310,6 +399,14 @@ class _SavingsGoalCard extends StatelessWidget {
               minHeight: 11,
               backgroundColor: const Color(0xFFF1F5F9),
               valueColor: const AlwaysStoppedAnimation(Color(0xFFF59E0B)),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onAddFunds,
+              icon: const Icon(Icons.add),
+              label: const Text('Add funds'),
             ),
           ),
         ],

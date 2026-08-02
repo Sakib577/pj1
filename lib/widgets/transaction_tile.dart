@@ -57,12 +57,6 @@ class TransactionTile extends StatelessWidget {
               '${item.negative ? '-' : ''}${formatCurrency(item.amount)}',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
-            const SizedBox(width: 4),
-            const Icon(
-              Icons.more_horiz,
-              color: Color(0xFF9CA3AF),
-              size: 20,
-            ),
           ],
         ),
       ),

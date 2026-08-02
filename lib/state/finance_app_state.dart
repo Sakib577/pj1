@@ -636,10 +636,21 @@ class FinanceAppState extends ChangeNotifier {
   }
 
   Future<void> _loadUserDataForUser(String uid) async {
+    // Start independent cache/server reads together. Firestore can satisfy
+    // these from its local cache immediately while any network refresh runs.
+    final transactionsFuture = _financeRepository.loadTransactions(uid);
+    final paymentsFuture = _financeRepository.loadPlannedPayments(uid);
+    final debtsFuture = _financeRepository.loadDebts(uid);
+    final shoppingFuture = _financeRepository.loadShoppingItems(uid);
+    final budgetsFuture = _financeRepository.loadBudgets(uid);
+    final goalsFuture = _financeRepository.loadSavingsGoals(uid);
+    final notificationsFuture = _financeRepository.loadNotifications(uid);
+    final currencyFuture = _financeRepository.loadCurrency(uid);
+    final preferencesFuture = _financeRepository.loadPreferences(uid);
     await _loadCategoriesForUser(uid);
 
     try {
-      final transactions = await _financeRepository.loadTransactions(uid);
+      final transactions = await transactionsFuture;
       _transactions
         ..clear()
         ..addAll(transactions)
@@ -649,7 +660,7 @@ class FinanceAppState extends ChangeNotifier {
     } catch (_) {}
 
     try {
-      final payments = await _financeRepository.loadPlannedPayments(uid);
+      final payments = await paymentsFuture;
       _plannedPayments
         ..clear()
         ..addAll(payments)
@@ -659,7 +670,7 @@ class FinanceAppState extends ChangeNotifier {
     } catch (_) {}
 
     try {
-      final debts = await _financeRepository.loadDebts(uid);
+      final debts = await debtsFuture;
       _debts
         ..clear()
         ..addAll(debts)
@@ -667,7 +678,7 @@ class FinanceAppState extends ChangeNotifier {
     } catch (_) {}
 
     try {
-      final shoppingItems = await _financeRepository.loadShoppingItems(uid);
+      final shoppingItems = await shoppingFuture;
       if (shoppingItems.isNotEmpty) {
         _shoppingItems
           ..clear()
@@ -680,21 +691,21 @@ class FinanceAppState extends ChangeNotifier {
     try {
       _budgets
         ..clear()
-        ..addAll(await _financeRepository.loadBudgets(uid));
+        ..addAll(await budgetsFuture);
     } catch (_) {}
     try {
       _goals
         ..clear()
-        ..addAll(await _financeRepository.loadSavingsGoals(uid));
+        ..addAll(await goalsFuture);
     } catch (_) {}
     try {
       _notifications
         ..clear()
-        ..addAll(await _financeRepository.loadNotifications(uid));
+        ..addAll(await notificationsFuture);
     } catch (_) {}
 
     try {
-      final storedCurrency = await _financeRepository.loadCurrency(uid);
+      final storedCurrency = await currencyFuture;
       if (storedCurrency != null && storedCurrency.isNotEmpty) {
         CurrencySettings.update(code: storedCurrency, rates: _usdRates);
         _currencyNeedsSetup = false;
@@ -710,7 +721,7 @@ class FinanceAppState extends ChangeNotifier {
     }
 
     try {
-      final preferences = await _financeRepository.loadPreferences(uid);
+      final preferences = await preferencesFuture;
       _paymentNotificationsEnabled =
           preferences['paymentNotificationsEnabled'] as bool? ?? true;
       _budgetNotificationsEnabled =

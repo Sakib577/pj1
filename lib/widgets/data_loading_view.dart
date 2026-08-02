@@ -26,81 +26,41 @@ class _DataLoadingViewState extends State<DataLoadingView>
       children: [
         AnimatedBuilder(
           animation: _controller,
-          builder: (_, _) => CustomPaint(
-            size: const Size(220, 180),
-            painter: _WalletPainter(_controller.value),
-          ),
+          builder: (_, _) => _ThemeLoader(progress: _controller.value),
         ),
-        const SizedBox(height: 16),
-        const Text(''),
       ],
     ),
   );
 }
 
-class _WalletPainter extends CustomPainter {
-  const _WalletPainter(this.progress);
+class _ThemeLoader extends StatelessWidget {
+  const _ThemeLoader({required this.progress});
   final double progress;
   @override
-  void paint(Canvas canvas, Size size) {
-    final body = Paint()..color = const Color(0xFFFFAE00);
-    final white = Paint()..color = Colors.white;
-    canvas.scale(size.width / 220, size.height / 180);
-    // A perspective flip: the complete wallet turns around its vertical axis,
-    // rather than moving like a hinged door.
-    final flip = (progress * 2 - 1) * .32;
-    canvas.save();
-    canvas.translate(110, 90);
-    canvas.transform(
-      (Matrix4.identity()
-            ..setEntry(3, 2, .0015)
-            ..rotateY(flip))
-          .storage,
-    );
-    canvas.translate(-110, -90);
-    // Main wallet body, clasp, and cut-out match the reference silhouette.
-    final rect = RRect.fromRectAndRadius(
-      const Rect.fromLTWH(18, 44, 178, 118),
-      const Radius.circular(28),
-    );
-    canvas.drawRRect(rect, body);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(162, 81, 58, 48),
-        const Radius.circular(16),
-      ),
-      body,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(172, 86, 48, 38),
-        const Radius.circular(13),
-      ),
-      white,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(177, 91, 43, 28),
-        const Radius.circular(11),
-      ),
-      body,
-    );
-    final dollar = TextPainter(
-      text: const TextSpan(
-        text: r'$',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 78,
-          fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) => SizedBox(
+    width: 76,
+    height: 76,
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        Transform.rotate(
+          angle: progress * 6.283,
+          child: const SizedBox(
+            width: 68,
+            height: 68,
+            child: CircularProgressIndicator(
+              strokeWidth: 6,
+              color: Color(0xFFF59E0B),
+              backgroundColor: Color(0xFFFFF0CE),
+            ),
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    dollar.paint(canvas, const Offset(78, 52));
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _WalletPainter oldDelegate) =>
-      oldDelegate.progress != progress;
+        const Icon(
+          Icons.currency_exchange_rounded,
+          color: Color(0xFFF59E0B),
+          size: 28,
+        ),
+      ],
+    ),
+  );
 }

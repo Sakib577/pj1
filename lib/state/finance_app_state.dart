@@ -33,6 +33,7 @@ class FinanceAppState extends ChangeNotifier {
   Map<String, double> _usdRates = Map.of(CurrencySettings.usdRates);
   DateTime? _ratesUpdatedAt;
   bool _ratesLoading = false;
+  bool _isLoadingData = true;
   String? _syncedUid;
   bool _categorySyncReady = false;
   StreamSubscription<List<ExpenseCategory>>? _expenseCategorySubscription;
@@ -62,6 +63,7 @@ class FinanceAppState extends ChangeNotifier {
   SyncStatus get syncStatus => _syncStatus;
   bool get isOffline => _syncStatus == SyncStatus.offline;
   bool get hasPendingSync => _syncStatus == SyncStatus.pending;
+  bool get isLoadingData => _isLoadingData;
 
   // FinanceAppScope is an InheritedNotifier and every page depends on it, so a
   // notifyListeners() during the framework's build/layout phase (e.g. an async
@@ -581,14 +583,21 @@ class FinanceAppState extends ChangeNotifier {
 
     _stopSync();
     _syncedUid = user.uid;
+    _isLoadingData = true;
+    notifyListeners();
 
     // Apply this user's last local choice while Firestore loads. This is also
     // the fallback when the device is offline after sign-in.
     await CurrencyPreferences.loadForUser(user.uid);
     _usdRates = Map.of(CurrencySettings.usdRates);
 
-    _initialLoad = _loadUserDataForUser(user.uid);
-    await _initialLoad;
+    try {
+      _initialLoad = _loadUserDataForUser(user.uid);
+      await _initialLoad;
+    } finally {
+      _isLoadingData = false;
+      notifyListeners();
+    }
   }
 
   void stopCategorySync() {
@@ -817,6 +826,7 @@ class FinanceAppState extends ChangeNotifier {
     _goals.clear();
     _notifications.clear();
     _currencyNeedsSetup = false;
+    _isLoadingData = false;
     _paymentNotificationsEnabled = true;
     _budgetNotificationsEnabled = true;
     _biometricLockEnabled = false;

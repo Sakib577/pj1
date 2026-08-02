@@ -316,10 +316,16 @@ class _BudgetCategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Per-category progress (spent / limit) for row indicator.
-    final progress = (item.spent / item.limit).clamp(0.0, 1.0);
-    final isNearLimit = progress >= 0.8;
-    final statusText = isNearLimit ? 'Near limit' : 'Healthy';
-    final statusColor = isNearLimit
+    final rawProgress = item.limit == 0 ? 0.0 : item.spent / item.limit;
+    final progress = rawProgress.clamp(0.0, 1.0);
+    final statusText = rawProgress >= 1
+        ? 'Overspent'
+        : rawProgress >= .7
+        ? 'Risky'
+        : 'Healthy';
+    final statusColor = rawProgress >= 1
+        ? const Color(0xFFDC2626)
+        : rawProgress >= .7
         ? const Color(0xFFE36306)
         : const Color(0xFF16A34A);
     return Container(

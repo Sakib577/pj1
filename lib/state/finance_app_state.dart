@@ -426,8 +426,13 @@ class FinanceAppState extends ChangeNotifier {
           .where(
             (transaction) =>
                 transaction.negative &&
-                transaction.categoryName == budget.label &&
-                _isInBudgetPeriod(transaction.createdAt, budget),
+                _isInBudgetPeriod(transaction.createdAt, budget) &&
+                // A calendar-month budget is the user's overall monthly
+                // spending limit, so it includes every expense from the 1st
+                // through the final day of this month. Repeating budgets keep
+                // their category-specific behavior.
+                (budget.period == 'monthly' ||
+                    transaction.categoryName == budget.label),
           )
           .fold<double>(0, (total, transaction) => total + transaction.amount);
       return budget.copyWith(spent: spent);

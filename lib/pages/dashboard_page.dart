@@ -678,6 +678,9 @@ class _BalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final total = formatCurrency(summary.total);
+    // Shrink the number so a very large balance never overflows the card.
+    final balanceFontSize = _amountFontSize(total.length, base: 44, min: 24);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -696,9 +699,18 @@ class _BalanceCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            formatCurrency(summary.total),
-            style: const TextStyle(fontSize: 44, fontWeight: FontWeight.w800),
+          SizedBox(
+            height: 52,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                total,
+                style: TextStyle(
+                  fontSize: balanceFontSize,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 10),
           Container(
@@ -738,13 +750,25 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Pick ONE font size for all stat cards based on the longest amount, so a
+    // huge Income value shrinks both cards equally and they always keep the
+    // same height.
+    var longest = 0;
+    for (final stat in stats) {
+      final length = formatCurrency(stat.amount).length;
+      if (length > longest) longest = length;
+    }
+    final amountFontSize = _amountFontSize(longest);
     return Row(
       children: [
         for (int i = 0; i < stats.length; i++)
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(right: i == stats.length - 1 ? 0 : 12),
-              child: _StatCard(data: stats[i]),
+              child: _StatCard(
+                data: stats[i],
+                amountFontSize: amountFontSize,
+              ),
             ),
           ),
       ],
@@ -752,9 +776,22 @@ class _StatsRow extends StatelessWidget {
   }
 }
 
+// Maps a formatted amount's character length to a font size, with a floor, so
+// long numbers automatically render smaller instead of overflowing.
+double _amountFontSize(
+  int length, {
+  double base = 22,
+  double min = 14,
+}) {
+  if (length <= 10) return base;
+  final size = base - ((length - 10) * 1.5).clamp(0, 20);
+  return size < min ? min : size;
+}
+
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.data});
+  const _StatCard({required this.data, required this.amountFontSize});
   final StatCardData data;
+  final double amountFontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -785,9 +822,21 @@ class _StatCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            formatCurrency(data.amount),
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          // Fixed-height box + FittedBox keeps both cards the same height even
+          // when one amount is much longer than the other.
+          SizedBox(
+            height: 28,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                formatCurrency(data.amount),
+                style: TextStyle(
+                  fontSize: amountFontSize,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
           ),
         ],
       ),

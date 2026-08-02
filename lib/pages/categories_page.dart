@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/finance_models.dart';
 import '../state/finance_app_state.dart';
+import '../widgets/category_logo.dart';
 import 'category_detail_page.dart';
 
 enum _CategoryPageMenuAction { expense, income }
@@ -324,9 +325,9 @@ class _CategoryCard extends StatelessWidget {
                 for (final subcategory in category.subcategories)
                   onSelect == null
                       ? Chip(
-                          avatar: Text(
-                            subcategoryEmoji(category, subcategory),
-                            style: const TextStyle(fontSize: 15),
+                          avatar: SubcategoryLogo(
+                            category: category,
+                            subcategory: subcategory,
                           ),
                           label: Text(subcategory),
                           backgroundColor: const Color(0xFFFFF4E8),
@@ -349,9 +350,9 @@ class _CategoryCard extends StatelessWidget {
                               : null,
                         )
                       : ActionChip(
-                          avatar: Text(
-                            subcategoryEmoji(category, subcategory),
-                            style: const TextStyle(fontSize: 15),
+                          avatar: SubcategoryLogo(
+                            category: category,
+                            subcategory: subcategory,
                           ),
                           label: Text(subcategory),
                           backgroundColor: const Color(0xFFFFF4E8),

@@ -41,31 +41,29 @@ class MyApp extends StatelessWidget {
     final appState = FinanceAppState();
     return FinanceAppScope(
       notifier: appState,
-      // Rebuilding the whole app subtree from the root when appState changes
-      // (instead of relying on the InheritedWidget to mark every dependent)
-      // avoids Flutter's InheritedElement '_dependents.isEmpty' assertion that
-      // can be tripped when a change lands while a dialog/bottom sheet is
-      // closing.
-      child: ListenableBuilder(
-        listenable: appState,
-        builder: (context, child) => MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'Expense Tracker',
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: seed),
-            scaffoldBackgroundColor: const Color(0xFFF7F5EF),
-            useMaterial3: true,
-            appBarTheme: const AppBarTheme(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              foregroundColor: Color(0xFF0F172A),
-            ),
-            textTheme: const TextTheme(
-              bodyMedium: TextStyle(color: Color(0xFF0F172A)),
-            ),
+      // FinanceAppScope is an InheritedNotifier, so every page that reads the
+      // state through FinanceAppScope.of(context) is rebuilt automatically when
+      // the state changes (including pushed routes, which a root ListenableBuilder
+      // could not reach because Navigator caches route widgets). The state defers
+      // its notifyListeners() to after the frame, which keeps this safe during
+      // route/dialog transitions.
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Expense Tracker',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: seed),
+          scaffoldBackgroundColor: const Color(0xFFF7F5EF),
+          useMaterial3: true,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            foregroundColor: Color(0xFF0F172A),
           ),
-          home: home ?? const AuthGate(),
+          textTheme: const TextTheme(
+            bodyMedium: TextStyle(color: Color(0xFF0F172A)),
+          ),
         ),
+        home: home ?? const AuthGate(),
       ),
     );
   }

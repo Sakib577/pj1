@@ -141,6 +141,145 @@ String subcategoryEmoji(ExpenseCategory category, String subcategory) {
   return defaultSubcategoryEmoji(subcategory);
 }
 
+/// Returns the Material icon to show for a subcategory that is part of the
+/// built-in (pre-defined) set — these use icons that match the app theme
+/// instead of emojis. Returns null for user-defined subcategories, which are
+/// rendered with an emoji instead. Unknown built-in names fall back to a
+/// generic label icon.
+IconData? subcategoryIcon(ExpenseCategory category, String subcategory) {
+  if (category.userDefinedSubcategories.contains(subcategory)) return null;
+  return _subcategoryIconMap[subcategory] ?? Icons.label_outline_rounded;
+}
+
+// Curated Material icon per built-in subcategory, matching the orange app theme.
+const Map<String, IconData> _subcategoryIconMap = <String, IconData>{
+  // Food & Drinks
+  'Groceries': Icons.local_grocery_store_rounded,
+  'Restaurant & Café': Icons.restaurant_rounded,
+  'Snacks': Icons.fastfood_rounded,
+  'Food delivery': Icons.delivery_dining_rounded,
+  // Shopping
+  'Clothes & Shoes': Icons.checkroom_rounded,
+  'Medicine': Icons.medication_rounded,
+  'Electronics': Icons.devices_rounded,
+  'Accessories': Icons.watch_rounded,
+  'Gifts': Icons.card_giftcard_rounded,
+  'Health': Icons.favorite_rounded,
+  'Home': Icons.home_rounded,
+  'Beauty': Icons.brush_rounded,
+  'Jewellery': Icons.diamond_rounded,
+  'Kids': Icons.child_care_rounded,
+  'Pets': Icons.pets_rounded,
+  'Stationery & DIY': Icons.handyman_rounded,
+  // Housing
+  'Rent or mortgage': Icons.key_rounded,
+  'Utilities': Icons.bolt_rounded,
+  'Furniture': Icons.chair_rounded,
+  'Repairs': Icons.build_rounded,
+  'Home supplies': Icons.cleaning_services_rounded,
+  // Transportation
+  'Public transport': Icons.directions_bus_rounded,
+  'Ride share': Icons.local_taxi_rounded,
+  'Taxi': Icons.local_taxi_rounded,
+  'Bicycle': Icons.directions_bike_rounded,
+  // Vehicle
+  'Fuel': Icons.local_gas_station_rounded,
+  'Insurance': Icons.verified_user_rounded,
+  'Parking': Icons.local_parking_rounded,
+  'Rentals': Icons.directions_car_rounded,
+  'Maintenance': Icons.settings_rounded,
+  // Lifestyle & Wellbeing
+  'Fitness': Icons.fitness_center_rounded,
+  'Charity': Icons.volunteer_activism_rounded,
+  'Culture & events': Icons.theater_comedy_rounded,
+  'Education': Icons.school_rounded,
+  'Healthcare': Icons.medical_services_rounded,
+  'Hobbies': Icons.palette_rounded,
+  'Travel & holidays': Icons.flight_rounded,
+  // Entertainment
+  'Books & audiobooks': Icons.menu_book_rounded,
+  'Subscriptions': Icons.autorenew_rounded,
+  'Sports': Icons.sports_soccer_rounded,
+  'Games': Icons.sports_esports_rounded,
+  'Movies & shows': Icons.movie_rounded,
+  // Communication
+  'Internet bill': Icons.wifi_rounded,
+  'Phone bill': Icons.phone_rounded,
+  'Postage': Icons.markunread_mailbox_rounded,
+  // Software & Digital Assets
+  'Software': Icons.code_rounded,
+  'Cloud services': Icons.cloud_rounded,
+  'Digital assets': Icons.storage_rounded,
+  // Investments
+  'Stocks & ETFs': Icons.show_chart_rounded,
+  'Mutual funds': Icons.savings_rounded,
+  'Bonds': Icons.account_balance_rounded,
+  'Retirement contributions': Icons.account_balance_wallet_rounded,
+  // Legal & Financial
+  'Bank charges': Icons.account_balance_rounded,
+  'Professional fees': Icons.gavel_rounded,
+  'Child support': Icons.family_restroom_rounded,
+  'Fines': Icons.gpp_bad_rounded,
+  'Loan interest': Icons.percent_rounded,
+  'Taxes': Icons.receipt_long_rounded,
+  'Fees & taxes': Icons.receipt_rounded,
+  // Income: Salary & Wages
+  'Base salary': Icons.payments_rounded,
+  'Overtime': Icons.schedule_rounded,
+  'Bonus': Icons.celebration_rounded,
+  'Commission': Icons.handshake_rounded,
+  'Allowance': Icons.savings_outlined,
+  'Advance payment': Icons.fast_forward_rounded,
+  // Income: Dues Received
+  'Outstanding payment': Icons.pending_actions_rounded,
+  'Reimbursement': Icons.currency_exchange_rounded,
+  'Refund on bills': Icons.replay_rounded,
+  'Pending invoice': Icons.receipt_long_rounded,
+  // Income: Interest
+  'Savings interest': Icons.savings_rounded,
+  'Deposit interest': Icons.account_balance_rounded,
+  'Fixed deposit': Icons.lock_rounded,
+  'Bond interest': Icons.description_rounded,
+  // Income: Dividends
+  'Stock dividends': Icons.show_chart_rounded,
+  'Fund distributions': Icons.ballot_rounded,
+  'Cash dividends': Icons.payments_rounded,
+  // Income: Loan Repayments
+  'Personal loan repayment': Icons.handshake_rounded,
+  'Business loan repayment': Icons.business_center_rounded,
+  'Partial repayment': Icons.call_split_rounded,
+  // Income: Rental Income
+  'Property rent': Icons.home_work_rounded,
+  'Equipment rent': Icons.hardware_rounded,
+  'Shared room': Icons.bed_rounded,
+  'Parking space': Icons.local_parking_rounded,
+  // Income: Sales
+  'Personal items': Icons.sell_rounded,
+  'Business sales': Icons.storefront_rounded,
+  'Online sales': Icons.shopping_bag_rounded,
+  'Marketplace sale': Icons.store_rounded,
+  // Income: Gifts
+  'Cash gift': Icons.card_giftcard_rounded,
+  'Gift card': Icons.card_giftcard_rounded,
+  'Family support': Icons.family_restroom_rounded,
+  'Celebration gift': Icons.celebration_rounded,
+  // Income: Refunds
+  'Purchase refund': Icons.refresh_rounded,
+  'Tax refund': Icons.request_quote_rounded,
+  'Shipping refund': Icons.local_shipping_rounded,
+  // Income: Freelance & Side Work
+  'Freelance project': Icons.work_rounded,
+  'Consulting': Icons.support_agent_rounded,
+  'Side job': Icons.work_outline_rounded,
+  'Contract work': Icons.description_rounded,
+  'Content creation': Icons.video_call_rounded,
+  // Income: Other Income
+  'Cashback': Icons.currency_exchange_rounded,
+  'Prize': Icons.emoji_events_rounded,
+  'Gift voucher': Icons.card_giftcard_rounded,
+  'Other': Icons.more_horiz_rounded,
+};
+
 /// A curated default emoji per common subcategory, falling back to a stable,
 /// name-derived emoji so that every distinct subcategory still gets its own.
 String defaultSubcategoryEmoji(String name) {

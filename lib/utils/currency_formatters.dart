@@ -16,15 +16,17 @@ String formatCurrency(double value) {
   }
 
   final formattedWhole = buffer.toString().split('').reversed.join();
-  return '${isNegative ? '-' : ''}${CurrencySettings.symbol}$formattedWhole.${parts.last}';
+  // Hide decimal digits when the fraction is zero, and trim trailing zeros
+  // otherwise, so "1000.00" -> "1000" and "12.50" -> "12.5".
+  var fraction = parts.last;
+  fraction = fraction.replaceFirst(RegExp(r'0+$'), '');
+  final decimal = fraction.isEmpty ? '' : '.$fraction';
+  return '${isNegative ? '-' : ''}${CurrencySettings.symbol}$formattedWhole$decimal';
 }
 
 String formatCurrencyNoCents(double value) {
-  // Reuse full formatter first, then trim trailing .00 for cleaner UI labels.
-  final formatted = formatCurrency(value);
-  return formatted.endsWith('.00')
-      ? formatted.substring(0, formatted.length - 3)
-      : formatted;
+  // Reuse the full formatter; it already omits zero decimals.
+  return formatCurrency(value);
 }
 
 String formatCurrencyInput(double value) {

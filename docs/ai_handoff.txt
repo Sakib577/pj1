@@ -89,17 +89,28 @@ Important files
   when connectivity returns). completeShoppingItem adds a Shopping expense
   transaction when an item is checked off. Debts affect the balance: borrowing adds
   money and lending subtracts it at creation; Repaid reverses that money movement;
-Close/Forgive never moves money. confirmPlannedPayment records a due payment as a
-   real transaction and removes it from the planned list (so a confirmed amount
-   shows only as a transaction, never as an upcoming payment). On load, expense
-   categories are normalized so the "Missing/
-   Uncategorized" catch-all becomes "Missing" and is kept first in the list.
-   notifyListeners() defers via addPostFrameCallback when the scheduler is mid-build
-   to avoid Flutter's InheritedElement '_dependents.isEmpty' assertion. Subcategories
-   carry a per-name emoji (subcategoryEmojis) chosen via an emoji picker for
-   user-defined ones or derived from a curated default map. The state tracks
-   SyncStatus (synced / offline / pending) from the transactions snapshot metadata
-   and exposes syncStatus, isOffline, and hasPendingSync.
+  Close/Forgive never moves money. confirmPlannedPayment records a due payment as a
+  real transaction and removes it from the planned list (so a confirmed amount
+  shows only as a transaction, never as an upcoming payment). On load, expense
+  categories are normalized so the "Missing/
+  Uncategorized" catch-all becomes "Missing" and is kept first in the list.
+  Subcategories carry a per-name emoji (subcategoryEmojis) chosen via an emoji
+  picker for user-defined ones or derived from a curated default map. The state
+  tracks SyncStatus (synced / offline / pending) from the transactions snapshot
+  metadata and exposes syncStatus, isOffline, and hasPendingSync.
+- lib/state/finance_app_state.dart (FinanceAppScope): FinanceAppScope extends
+  InheritedNotifier<FinanceAppState> and is created once in main.dart around
+  MaterialApp. Every widget that calls FinanceAppScope.of(context) registers as a
+  dependent and is rebuilt automatically whenever the state notifies - INCLUDING
+  pushed routes (Navigator caches route widgets, which is why the earlier
+  root-ListenableBuilder approach could not refresh pushed pages such as the
+  Settings/currency screen). notifyListeners() is overridden to defer the real
+  notification to just after the current frame (addPostFrameCallback) and to
+  coalesce bursts in the same frame; this deferral is what makes notifying during
+  route/dialog pops safe and avoids Flutter's InheritedElement '_dependents.isEmpty'
+  assertion. This single mechanism is why the UI updates instantly on every state
+  change (new transaction, currency switch, live Firestore snapshot, offline/
+  syncing flag) without needing to leave and re-enter a page.
 - lib/services/category_repository.dart: reads/writes/seeds categories in Firestore
   at users/{uid}/expense_categories and users/{uid}/income_categories and exposes a
   live snapshot stream.
@@ -119,8 +130,9 @@ Close/Forgive never moves money. confirmPlannedPayment records a due payment as 
   IconData and Color, so they should not be used directly as Firestore database
   models, but they do carry toMap/fromMap serialization (icons via a stable name
   mapping, colors via ARGB ints) used by the finance repository. ExpenseCategory has
-  a toMap/fromMap for the Firestore category docs, a subcategoryEmojis map, and a
-  subcategoryEmoji() + defaultSubcategoryEmoji() lookup. SyncStatus is an enum
+  a toMap/fromMap for the Firestore category docs, a subcategoryEmojis map, a
+  subcategoryEmoji() lookup, a defaultSubcategoryEmoji() fallback, and a curated
+  subcategoryIcon() map of Material icons for built-in subcategories. SyncStatus is an enum
   (synced / offline / pending) used to surface offline/syncing state. PlannedPayment carries a repeat
   schedule (RepeatFrequency once/daily/weekly/monthly/custom), a nextDue() helper,
   a lastConfirmedDate used to skip already-confirmed occurrences, and a
@@ -128,14 +140,25 @@ Close/Forgive never moves money. confirmPlannedPayment records a due payment as 
   so repaid vs forgiven/closed records stay distinct, and ShoppingItem (subcategory,
   done flag, price) are simple in-memory models.
 - lib/utils/currency_settings.dart: current display currency and loaded rates.
+  The selected code is kept even when the loaded rates map does not yet contain it
+  (it defaults to rate 1 until live FX rates arrive). This is what makes the
+  user's currency survive sign-out / sign-in: on login the stored code is loaded
+  from Firestore before the rates, and without this behavior the code was reset to
+  USD because the initial rates map only contained USD.
 - lib/utils/currency_formatters.dart: formatCurrency / formatCurrencyNoCents /
   formatCurrencyInput helpers (display currency with manual thousands grouping).
+  formatCurrency omits decimals entirely when the fraction is zero and trims
+  trailing zeros otherwise (1000.00 -> "1000", 12.50 -> "12.5"), so dashboards
+  never show noisy ".00".
 - lib/widgets/: shared UI building blocks (TransactionTile, EmptyStateCard,
-  PlannedPaymentCard) reused by the dashboard and the transactions / planned
-  payments pages. EmptyStateCard renders content-sized and top-left aligned: it
-  wraps its card in Align(topLeft) + UnconstrainedBox(constrainedAxis:
-  Axis.horizontal) so the inner Row never stretches vertically (Flex fills a
-  bounded cross axis).
+  PlannedPaymentCard, CategoryLogo, SubcategoryLogo) reused by the dashboard and
+  the transactions / planned payments / categories pages. EmptyStateCard renders
+  content-sized and top-left aligned: it wraps its card in Align(topLeft) +
+  UnconstrainedBox(constrainedAxis: Axis.horizontal) so the inner Row never
+  stretches vertically (Flex fills a bounded cross axis). CategoryLogo renders the
+  orange Material icon for built-in categories or the emoji for user-defined ones;
+  SubcategoryLogo does the same per subcategory (curated icon for built-ins,
+  emoji for user-defined).
 - lib/data/: currently an empty directory, reserved for future repository/database
   code.
 - firestore.rules: deployed Firestore rules.
@@ -205,18 +228,35 @@ Current behavior
   repayments, rental income, sales, gifts, refunds, freelance/side work, and other
   income.
 - Built-in categories use orange Material icons; emojis are reserved for
-  user-defined categories. The Add Transaction page shows horizontal category
+  user-defined categories. Built-in SUBcategories also use curated orange Material
+  icons (subcategoryIcon map in finance_models.dart); only user-defined
+  subcategories show emojis. The Add Transaction page shows horizontal category
   shortcuts (recently used tracked separately for income and expenses, plus a "Add
   category" shortcut). Tapping a category opens the reusable category/subcategory
-  selector. A category is required by default; the text field is an optional note.
-  Transactions currently record the selected category/subcategory name for later
-  analytics.
+  selector (CategoryDetailPage), whose header always shows the tapped category's
+  own logo (its Material icon, not a generic file/folder icon). A category is
+  required by default; the text field is an optional note. Transactions currently
+  record the selected category/subcategory name for later analytics.
 - User-defined categories and user-added subcategories can be deleted. Their
   affected in-memory transactions are reassigned to Other.
 - Currency settings loads the provider's supported ISO currencies at runtime. All
   amount formatting uses the selected display currency. Financial totals are held
   internally in USD and newly entered amounts are converted to USD using the
-  currently loaded rate.
+  currently loaded rate. The chosen currency is persisted to Firestore at
+  users/{uid}/settings/currency on selection and loaded again on every sign-in, so
+  the previously selected currency is restored instead of resetting to USD. Amount
+  strings never show trailing ".00": formatCurrency hides zero decimals and trims
+  trailing zeros (1000.00 -> "1000", 12.50 -> "12.5"). The dashboard's Total
+  Balance and Income/Expense stat cards keep equal heights: the stat cards share a
+  single font size computed from the longest amount (so a huge Income shrinks BOTH
+  cards), the balance font shrinks for very large totals, and both are wrapped in
+  FittedBox(scaleDown) so numbers never overflow.
+- Because FinanceAppScope is an InheritedNotifier, every screen that reads app
+  state rebuilds the instant state changes - there is no need to leave and
+  re-enter a page to see fresh values. Live Firestore snapshot updates, new
+  transactions, the offline/syncing banner, and a currency change in the Settings
+  picker all appear immediately (the Settings "Select currency" subtitle updates
+  the moment a new currency is picked).
 - Transactions, planned payments, debts, and shopping-list items are persisted to
   Firestore under users/{uid}/transactions, users/{uid}/planned_payments,
   users/{uid}/debts, and users/{uid}/shopping_items. The state subscribes to live
@@ -263,16 +303,44 @@ Recommended next work
    data to persist), then persist them. Notifications currently rely on the app
    being opened to reschedule; consider an on-device scheduler/periodic task.
 6. Fix test/widget_test.dart so it matches the new Add Transaction calculator-keypad
-   flow (it currently fails because it taps old keys that no longer exist).
+   flow (it currently fails because it taps old keys that no longer exist and does
+   not initialize a Firebase mock).
 7. Add password reset, resend-email cooldown, account deletion, error telemetry, and
    App Check before production release.
+8. Optimize startup and hot paths once the remaining features land (see "Performance
+   notes" below).
+
+Performance notes
+-----------------
+- The current architecture is already cheap on rebuilds: only widgets that call
+  FinanceAppScope.of(context) rebuild on state changes (InheritedNotifier), not the
+  whole widget tree. This replaced the earlier root-level ListenableBuilder, which
+  rebuilt MaterialApp wholesale on every change.
+- Recommended optimization ORDER (finish features first, then measure with
+  `flutter run --profile`):
+  a) Build the app with `--release`/`--profile` and run on a real low-end device to
+     get an actual baseline before changing anything.
+  b) Profile with the Flutter DevTools "Performance" tab; look for jank in
+     rebuild/frame counts, not general startup.
+  c) Cheap wins: avoid `setState` during scroll; wrap long ListView builders in
+     `itemBuilder` (already used in most lists); ensure dialogs/sheets are popped
+     before heavy work; keep Firestore `includeMetadataChanges` only on the one
+     watchSyncStatus stream.
+  d) Defer heavy work off the first frame: load exchange rates lazily (already done)
+     and avoid building CategoryDetailPage subtrees until needed.
+- Do NOT prematurely add a local database (Drift/SQLite), streams optimizations, or
+  isar until the UI features and data model are finalized - most real-world slowness
+  here is Firebase cold-start on slow networks, which offline persistence already
+  mitigates.
 
 Development notes
 -----------------
 - Run web: flutter run -d chrome
 - Run Android: flutter run -d <device-id>
 - Build debug APK: flutter build apk --debug
-- Test: flutter test  (currently FAILING; see item 6 above)
+- Test: flutter test  (test/scope_architecture_test.dart passes; test/widget_test.dart
+  currently FAILS because it taps old keys that no longer exist and does not mock
+  Firebase - see item 6 above)
 - Flutter analyze: reports no issues (clean).
 - Android build.gradle.kts enables core library desugaring
   (coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4') because

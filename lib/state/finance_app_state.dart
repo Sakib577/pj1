@@ -1120,29 +1120,25 @@ class FinanceAppState extends ChangeNotifier {
   ];
 }
 
-// FinanceAppScope is a plain InheritedWidget that simply exposes the shared
-// FinanceAppState. It deliberately does NOT use InheritedNotifier: relying on
-// the framework to rebuild every dependent from an InheritedNotifier during a
-// route/dialog pop can trip Flutter's InheritedElement '_dependents.isEmpty'
-// assertion. Instead the app subtree is rebuilt from the root via a
-// ListenableBuilder (see main.dart), which never touches the inherited
-// element's dependents. updateShouldNotify stays false because the state
-// instance never changes.
-class FinanceAppScope extends InheritedWidget {
+// FinanceAppScope is an InheritedNotifier that exposes the shared
+// FinanceAppState. Every widget that calls FinanceAppScope.of(context) becomes
+// a dependent and is rebuilt automatically when the notifier fires — including
+// pushed routes, which the root-level ListenableBuilder approach could not
+// reach (Navigator caches route widgets, so only the home route rebuilt).
+// The '_dependents.isEmpty' assertion is avoided by FinanceAppState deferring
+// every notifyListeners() to just after the current frame (see the override at
+// the top of this file), so dependents are never marked dirty while the element
+// tree is mid-deactivation (route/dialog pop).
+class FinanceAppScope extends InheritedNotifier<FinanceAppState> {
   const FinanceAppScope({
     super.key,
-    required this.notifier,
+    required FinanceAppState notifier,
     required super.child,
-  }) : super();
-
-  final FinanceAppState notifier;
-
-  @override
-  bool updateShouldNotify(FinanceAppScope oldWidget) => false;
+  }) : super(notifier: notifier);
 
   static FinanceAppState of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<FinanceAppScope>();
     assert(scope != null, 'FinanceAppScope not found in widget tree.');
-    return scope!.notifier;
+    return scope!.notifier!;
   }
 }

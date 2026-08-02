@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/finance_models.dart';
+import '../widgets/category_logo.dart';
 
 class CategoryDetailPage extends StatefulWidget {
   const CategoryDetailPage({
@@ -71,8 +72,11 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                           alignment: Alignment.center,
-                          child: Text(categoryLogo(widget.category),
-                              style: const TextStyle(fontSize: 26)),
+                          child: CategoryLogo(
+                            category: widget.category,
+                            iconSize: 30,
+                            emojiSize: 26,
+                          ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -152,14 +156,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
   }
 }
 
-// Logo (emoji or icon glyph) used for the category header and subcategory rows.
-String categoryLogo(ExpenseCategory category) {
-  if (category.isUserDefined) return category.emoji ?? '🏷️';
-  return defaultCategoryLogo;
-}
-
-String get defaultCategoryLogo => '📁';
-
+// Logo (icon or emoji) used for the category header and subcategory rows.
 class _ChoiceTile extends StatelessWidget {
   const _ChoiceTile({
     required this.category,
@@ -171,7 +168,6 @@ class _ChoiceTile extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
-    final logo = subcategoryEmoji(category, label);
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
@@ -182,7 +178,12 @@ class _ChoiceTile extends StatelessWidget {
           color: const Color(0xFFFFF4E8),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Text(logo, style: const TextStyle(fontSize: 20)),
+        child: SubcategoryLogo(
+          category: category,
+          subcategory: label,
+          iconSize: 22,
+          emojiSize: 20,
+        ),
       ),
       title: Text(
         label,

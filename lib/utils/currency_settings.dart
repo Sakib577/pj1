@@ -12,8 +12,14 @@ class CurrencySettings {
     required String code,
     required Map<String, double> rates,
   }) {
-    _code = rates.containsKey(code) ? code : 'USD';
-    _usdRates = Map.unmodifiable(rates);
+    // Keep the requested code even if `rates` does not contain it yet (e.g. the
+    // stored currency is loaded on login before the live FX rates arrive). The
+    // rate defaults to 1 so amounts still render, and gets replaced when the
+    // real rates are fetched. This is what makes the user's currency survive a
+    // sign-out / sign-in.
+    final normalized = code.trim().toUpperCase();
+    _code = normalized.isEmpty ? 'USD' : normalized;
+    _usdRates = Map.unmodifiable({...rates, _code: rates[_code] ?? 1});
   }
 
   static double fromUsd(double usdAmount) => usdAmount * rate;

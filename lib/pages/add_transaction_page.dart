@@ -4,7 +4,7 @@ import '../models/finance_models.dart';
 import 'category_detail_page.dart';
 import 'categories_page.dart';
 import '../state/finance_app_state.dart';
-import '../utils/currency_formatters.dart';
+import '../utils/currency_settings.dart';
 
 class AddTransactionPage extends StatefulWidget {
   const AddTransactionPage({super.key});
@@ -166,7 +166,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         ? appState.incomeCategories
         : appState.expenseCategories;
     final currentCategory = _selectedCategory ?? categories.first;
-    final amount = _calculateAmount();
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -319,7 +318,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          '${_isIncome ? '' : '-'}${formatCurrencyNoCents(amount)}',
+                          // The keypad expression is already in the selected
+                          // display currency. Do not run it through the USD
+                          // formatter here; conversion happens only on save.
+                          '${_isIncome ? '' : '-'}${CurrencySettings.symbol}$_amountExpression',
                           maxLines: 1,
                           style: TextStyle(
                             fontSize: amountFontSize,
@@ -393,8 +395,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       MaterialPageRoute(
         builder: (_) => CategoryDetailPage(
           category: category,
-          onAddSubcategory: (name, emoji) => FinanceAppScope.of(context)
-              .addSubcategory(
+          onAddSubcategory: (name, emoji) =>
+              FinanceAppScope.of(context).addSubcategory(
                 categoryId: category.id,
                 name: name,
                 emoji: emoji,

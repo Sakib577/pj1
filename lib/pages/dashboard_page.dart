@@ -236,6 +236,12 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     final appState = FinanceAppScope.of(context);
+    // Keep the app chrome hidden until the initial Firestore/cache restore is
+    // complete, so launch feels like a deliberate splash screen rather than a
+    // dashboard briefly filled with empty values.
+    if (appState.isLoadingData) {
+      return const Scaffold(body: DataLoadingView());
+    }
     final summary = appState.balanceSummary;
     final stats = appState.stats;
     final transactions = appState.transactions;
@@ -312,111 +318,103 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           _SyncStatusBanner(status: appState.syncStatus),
           Expanded(
-            child: appState.isLoadingData
-                ? const DataLoadingView()
-                : IndexedStack(
-                    index: _navIndex,
+            child: IndexedStack(
+              index: _navIndex,
+              children: [
+                SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 8,
-                        ),
-                        physics: const BouncingScrollPhysics(
-                          parent: AlwaysScrollableScrollPhysics(),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _BalanceCard(summary: summary),
-                            const SizedBox(height: 16),
-                            _StatsRow(stats: stats),
-                            const SizedBox(height: 20),
-                            _SectionHeader(
-                              title: 'Recent Transactions',
-                              trailing: 'View All',
-                              onTrailingPressed: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => const TransactionsPage(),
-                                  ),
-                                );
-                              },
+                      _BalanceCard(summary: summary),
+                      const SizedBox(height: 16),
+                      _StatsRow(stats: stats),
+                      const SizedBox(height: 20),
+                      _SectionHeader(
+                        title: 'Recent Transactions',
+                        trailing: 'View All',
+                        onTrailingPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const TransactionsPage(),
                             ),
-                            const SizedBox(height: 12),
-                            if (transactions.isEmpty)
-                              const EmptyStateCard(
-                                title: 'No transactions yet',
-                                subtitle:
-                                    'Add your first transaction to start tracking.',
-                                icon: Icons.receipt_long,
-                              )
-                            else
-                              ...transactions
-                                  .take(3)
-                                  .map(
-                                    (item) => Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 12,
-                                      ),
-                                      child: TransactionTile(
-                                        item: item,
-                                        onTap: () => showTransactionActions(
-                                          context,
-                                          item,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                            const SizedBox(height: 12),
-                            _SectionHeader(
-                              title: 'Planned Payments',
-                              trailing: 'View All',
-                              onTrailingPressed: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => const PlannedPaymentsPage(),
-                                  ),
-                                );
-                              },
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      if (transactions.isEmpty)
+                        const EmptyStateCard(
+                          title: 'No transactions yet',
+                          subtitle:
+                              'Add your first transaction to start tracking.',
+                          icon: Icons.receipt_long,
+                        )
+                      else
+                        ...transactions
+                            .take(3)
+                            .map(
+                              (item) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: TransactionTile(
+                                  item: item,
+                                  onTap: () =>
+                                      showTransactionActions(context, item),
+                                ),
+                              ),
                             ),
-                            const SizedBox(height: 12),
-                            if (appState.plannedPayments.isEmpty)
-                              const EmptyStateCard(
-                                title: 'No planned payments yet',
-                                subtitle:
-                                    'Schedule upcoming bills once you create them.',
-                                icon: Icons.event_note_outlined,
-                              )
-                            else
-                              ...appState.plannedPayments
-                                  .take(3)
-                                  .map(
-                                    (payment) => Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 12,
-                                      ),
-                                      child: PlannedPaymentCard(
-                                        payment: payment,
-                                        onTap: () => showPlannedPaymentActions(
-                                          context,
-                                          payment,
-                                        ),
-                                      ),
-                                    ),
+                      const SizedBox(height: 12),
+                      _SectionHeader(
+                        title: 'Planned Payments',
+                        trailing: 'View All',
+                        onTrailingPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const PlannedPaymentsPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      if (appState.plannedPayments.isEmpty)
+                        const EmptyStateCard(
+                          title: 'No planned payments yet',
+                          subtitle:
+                              'Schedule upcoming bills once you create them.',
+                          icon: Icons.event_note_outlined,
+                        )
+                      else
+                        ...appState.plannedPayments
+                            .take(3)
+                            .map(
+                              (payment) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: PlannedPaymentCard(
+                                  payment: payment,
+                                  onTap: () => showPlannedPaymentActions(
+                                    context,
+                                    payment,
                                   ),
-                            const SizedBox(height: 24),
-                          ],
-                        ),
-                      ),
-                      BudgetPage(budgets: appState.budgets),
-                      SavingsPage(
-                        overview: appState.savingsOverview,
-                        goals: appState.savingsGoals,
-                      ),
-                      const ProfilePage(),
+                                ),
+                              ),
+                            ),
+                      const SizedBox(height: 24),
                     ],
                   ),
+                ),
+                BudgetPage(budgets: appState.budgets),
+                SavingsPage(
+                  overview: appState.savingsOverview,
+                  goals: appState.savingsGoals,
+                ),
+                const ProfilePage(),
+              ],
+            ),
           ),
         ],
       ),

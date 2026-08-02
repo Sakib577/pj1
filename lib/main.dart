@@ -4,12 +4,16 @@ import 'package:flutter/material.dart';
 
 import 'auth_gate.dart';
 import 'firebase_options.dart';
+import 'services/currency_preferences.dart';
 import 'state/finance_app_state.dart';
 
 // Entry point: Flutter starts running the app from here.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Restore the display currency and its last known rates before any UI is
+  // built, so an offline launch never renders a selected sign with USD values.
+  await CurrencyPreferences.hydrate();
   // Enable Firestore offline persistence so the app keeps working (reads and
   // locally-buffered writes) while disconnected, then syncs on reconnect.
   await _enableOfflinePersistence();

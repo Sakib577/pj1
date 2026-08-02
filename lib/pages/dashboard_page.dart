@@ -314,93 +314,101 @@ class _DashboardPageState extends State<DashboardPage> {
             child: IndexedStack(
               index: _navIndex,
               children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _BalanceCard(summary: summary),
-                const SizedBox(height: 16),
-                _StatsRow(stats: stats),
-                const SizedBox(height: 20),
-                _SectionHeader(
-                  title: 'Recent Transactions',
-                  trailing: 'View All',
-                  onTrailingPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const TransactionsPage(),
+                SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _BalanceCard(summary: summary),
+                      const SizedBox(height: 16),
+                      _StatsRow(stats: stats),
+                      const SizedBox(height: 20),
+                      _SectionHeader(
+                        title: 'Recent Transactions',
+                        trailing: 'View All',
+                        onTrailingPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const TransactionsPage(),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
+                      const SizedBox(height: 12),
+                      if (transactions.isEmpty)
+                        const EmptyStateCard(
+                          title: 'No transactions yet',
+                          subtitle:
+                              'Add your first transaction to start tracking.',
+                          icon: Icons.receipt_long,
+                        )
+                      else
+                        ...transactions
+                            .take(3)
+                            .map(
+                              (item) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: TransactionTile(
+                                  item: item,
+                                  onTap: () =>
+                                      showTransactionActions(context, item),
+                                ),
+                              ),
+                            ),
+                      const SizedBox(height: 12),
+                      _SectionHeader(
+                        title: 'Planned Payments',
+                        trailing: 'View All',
+                        onTrailingPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const PlannedPaymentsPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      if (appState.plannedPayments.isEmpty)
+                        const EmptyStateCard(
+                          title: 'No planned payments yet',
+                          subtitle:
+                              'Schedule upcoming bills once you create them.',
+                          icon: Icons.event_note_outlined,
+                        )
+                      else
+                        ...appState.plannedPayments
+                            .take(3)
+                            .map(
+                              (payment) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: PlannedPaymentCard(
+                                  payment: payment,
+                                  onTap: () => showPlannedPaymentActions(
+                                    context,
+                                    payment,
+                                  ),
+                                ),
+                              ),
+                            ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 12),
-                if (transactions.isEmpty)
-                  const EmptyStateCard(
-                    title: 'No transactions yet',
-                    subtitle: 'Add your first transaction to start tracking.',
-                    icon: Icons.receipt_long,
-                  )
-                else
-                  ...transactions
-                      .take(5)
-                      .map(
-                        (item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: TransactionTile(
-                            item: item,
-                            onTap: () => showTransactionActions(context, item),
-                          ),
-                        ),
-                      ),
-                const SizedBox(height: 12),
-                _SectionHeader(
-                  title: 'Planned Payments',
-                  trailing: 'View All',
-                  onTrailingPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const PlannedPaymentsPage(),
-                      ),
-                    );
-                  },
+                BudgetPage(budgets: appState.budgets),
+                SavingsPage(
+                  overview: appState.savingsOverview,
+                  goals: appState.savingsGoals,
                 ),
-                const SizedBox(height: 12),
-                if (appState.plannedPayments.isEmpty)
-                  const EmptyStateCard(
-                    title: 'No planned payments yet',
-                    subtitle: 'Schedule upcoming bills once you create them.',
-                    icon: Icons.event_note_outlined,
-                  )
-                else
-                  ...appState.plannedPayments
-                      .take(3)
-                      .map(
-                        (payment) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: PlannedPaymentCard(
-                            payment: payment,
-                            onTap: () =>
-                                showPlannedPaymentActions(context, payment),
-                          ),
-                        ),
-                      ),
-                const SizedBox(height: 24),
+                const ProfilePage(),
               ],
             ),
           ),
-          BudgetPage(budgets: appState.budgets),
-          SavingsPage(
-            overview: appState.savingsOverview,
-            goals: appState.savingsGoals,
-          ),
-          const ProfilePage(),
-          ],
-        ),
-        ),
         ],
       ),
       floatingActionButton: isHome
@@ -765,10 +773,7 @@ class _StatsRow extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(right: i == stats.length - 1 ? 0 : 12),
-              child: _StatCard(
-                data: stats[i],
-                amountFontSize: amountFontSize,
-              ),
+              child: _StatCard(data: stats[i], amountFontSize: amountFontSize),
             ),
           ),
       ],
@@ -778,11 +783,7 @@ class _StatsRow extends StatelessWidget {
 
 // Maps a formatted amount's character length to a font size, with a floor, so
 // long numbers automatically render smaller instead of overflowing.
-double _amountFontSize(
-  int length, {
-  double base = 22,
-  double min = 14,
-}) {
+double _amountFontSize(int length, {double base = 22, double min = 14}) {
   if (length <= 10) return base;
   final size = base - ((length - 10) * 1.5).clamp(0, 20);
   return size < min ? min : size;
@@ -1008,7 +1009,9 @@ class _SyncStatusBanner extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: offline ? const Color(0xFFF97316) : const Color(0xFFCA8A04),
+              color: offline
+                  ? const Color(0xFFF97316)
+                  : const Color(0xFFCA8A04),
             ),
           ),
         ],

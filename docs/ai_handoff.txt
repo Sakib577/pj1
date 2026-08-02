@@ -303,44 +303,16 @@ Recommended next work
    data to persist), then persist them. Notifications currently rely on the app
    being opened to reschedule; consider an on-device scheduler/periodic task.
 6. Fix test/widget_test.dart so it matches the new Add Transaction calculator-keypad
-   flow (it currently fails because it taps old keys that no longer exist and does
-   not initialize a Firebase mock).
+   flow (it currently fails because it taps old keys that no longer exist).
 7. Add password reset, resend-email cooldown, account deletion, error telemetry, and
    App Check before production release.
-8. Optimize startup and hot paths once the remaining features land (see "Performance
-   notes" below).
-
-Performance notes
------------------
-- The current architecture is already cheap on rebuilds: only widgets that call
-  FinanceAppScope.of(context) rebuild on state changes (InheritedNotifier), not the
-  whole widget tree. This replaced the earlier root-level ListenableBuilder, which
-  rebuilt MaterialApp wholesale on every change.
-- Recommended optimization ORDER (finish features first, then measure with
-  `flutter run --profile`):
-  a) Build the app with `--release`/`--profile` and run on a real low-end device to
-     get an actual baseline before changing anything.
-  b) Profile with the Flutter DevTools "Performance" tab; look for jank in
-     rebuild/frame counts, not general startup.
-  c) Cheap wins: avoid `setState` during scroll; wrap long ListView builders in
-     `itemBuilder` (already used in most lists); ensure dialogs/sheets are popped
-     before heavy work; keep Firestore `includeMetadataChanges` only on the one
-     watchSyncStatus stream.
-  d) Defer heavy work off the first frame: load exchange rates lazily (already done)
-     and avoid building CategoryDetailPage subtrees until needed.
-- Do NOT prematurely add a local database (Drift/SQLite), streams optimizations, or
-  isar until the UI features and data model are finalized - most real-world slowness
-  here is Firebase cold-start on slow networks, which offline persistence already
-  mitigates.
 
 Development notes
 -----------------
 - Run web: flutter run -d chrome
 - Run Android: flutter run -d <device-id>
 - Build debug APK: flutter build apk --debug
-- Test: flutter test  (test/scope_architecture_test.dart passes; test/widget_test.dart
-  currently FAILS because it taps old keys that no longer exist and does not mock
-  Firebase - see item 6 above)
+- Test: flutter test  (currently FAILING; see item 6 above)
 - Flutter analyze: reports no issues (clean).
 - Android build.gradle.kts enables core library desugaring
   (coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4') because

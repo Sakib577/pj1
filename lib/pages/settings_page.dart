@@ -13,7 +13,10 @@ class SettingsPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text('Default currency', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          const Text(
+            'Default currency',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 8),
           Text(
             'Choose the currency used across balances, transactions, budgets, savings, and reports.',
@@ -89,18 +92,17 @@ class SettingsPage extends StatelessWidget {
     BuildContext context,
     FinanceAppState state,
   ) async {
-    if (state.availableCurrencyCodes.length == 1 && !state.ratesLoading) {
+    if (!state.ratesLoading) {
       try {
         await state.refreshExchangeRates();
       } catch (_) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Connect to the internet to load currencies.'),
+              content: Text('Using saved currency choices while offline.'),
             ),
           );
         }
-        return;
       }
     }
     if (!context.mounted) return;
@@ -121,10 +123,8 @@ Future<String?> showCurrencyPicker(
   return showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
-    builder: (sheetContext) => _CurrencyPicker(
-      codes: codes,
-      selectedCode: selectedCode,
-    ),
+    builder: (sheetContext) =>
+        _CurrencyPicker(codes: codes, selectedCode: selectedCode),
   );
 }
 

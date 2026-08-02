@@ -5,6 +5,7 @@ import '../state/finance_app_state.dart';
 import '../utils/currency_settings.dart';
 import '../widgets/empty_state_card.dart';
 import '../widgets/planned_payment_card.dart';
+import '../widgets/transaction_actions.dart';
 import 'categories_page.dart';
 import 'category_detail_page.dart';
 
@@ -28,29 +29,6 @@ class _PlannedPaymentsPageState extends State<PlannedPaymentsPage> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-    }
-  }
-
-  Future<void> _confirmDelete(PlannedPayment payment) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete planned payment?'),
-        content: Text('${payment.title} will be removed from your schedule.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && mounted) {
-      FinanceAppScope.of(context).removePlannedPayment(payment.id);
     }
   }
 
@@ -92,7 +70,7 @@ class _PlannedPaymentsPageState extends State<PlannedPaymentsPage> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: PlannedPaymentCard(
                       payment: payment,
-                      onDelete: () => _confirmDelete(payment),
+                      onTap: () => showPlannedPaymentActions(context, payment),
                     ),
                   ),
               ],
@@ -154,8 +132,8 @@ class _AddPlannedPaymentPageState extends State<AddPlannedPaymentPage> {
       MaterialPageRoute(
         builder: (_) => CategoryDetailPage(
           category: category,
-          onAddSubcategory: (name, emoji) => FinanceAppScope.of(context)
-              .addSubcategory(
+          onAddSubcategory: (name, emoji) =>
+              FinanceAppScope.of(context).addSubcategory(
                 categoryId: category.id,
                 name: name,
                 emoji: emoji,
@@ -270,8 +248,7 @@ class _AddPlannedPaymentPageState extends State<AddPlannedPaymentPage> {
     final categories = _isIncome
         ? appState.incomeCategories
         : appState.expenseCategories;
-    final currentCategory =
-        _selectedCategory ?? categories.firstOrNull;
+    final currentCategory = _selectedCategory ?? categories.firstOrNull;
 
     return Scaffold(
       appBar: AppBar(
@@ -346,9 +323,7 @@ class _AddPlannedPaymentPageState extends State<AddPlannedPaymentPage> {
                     if (index == categories.length) {
                       return SizedBox(
                         width: 96,
-                        child: _AddCategoryShortcut(
-                          onTap: _openCategoriesPage,
-                        ),
+                        child: _AddCategoryShortcut(onTap: _openCategoriesPage),
                       );
                     }
                     final category = categories[index];
@@ -569,9 +544,7 @@ class _RepeatChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFF59E0B) : Colors.white,
           border: Border.all(
-            color: selected
-                ? const Color(0xFFF59E0B)
-                : const Color(0xFFE5E7EB),
+            color: selected ? const Color(0xFFF59E0B) : const Color(0xFFE5E7EB),
           ),
           borderRadius: BorderRadius.circular(999),
         ),

@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/finance_models.dart';
 import '../services/category_repository.dart';
+import '../services/currency_preferences.dart';
 import '../services/exchange_rate_service.dart';
 import '../services/finance_repository.dart';
 import '../services/payment_reminder_service.dart';
@@ -28,7 +29,7 @@ class FinanceAppState extends ChangeNotifier {
   final List<BudgetCategory> _budgets = [];
   final List<SavingsGoal> _goals = [];
   final ExchangeRateService _exchangeRateService = ExchangeRateService();
-  Map<String, double> _usdRates = {'USD': 1};
+  Map<String, double> _usdRates = Map.of(CurrencySettings.usdRates);
   DateTime? _ratesUpdatedAt;
   bool _ratesLoading = false;
   String? _syncedUid;
@@ -125,14 +126,18 @@ class FinanceAppState extends ChangeNotifier {
   void addPlannedPayment(PlannedPayment payment) {
     _plannedPayments.insert(0, payment);
     notifyListeners();
-    unawaited(_write((uid) => _financeRepository.savePlannedPayment(uid, payment)));
+    unawaited(
+      _write((uid) => _financeRepository.savePlannedPayment(uid, payment)),
+    );
     _syncReminders();
   }
 
   void removePlannedPayment(String id) {
     _plannedPayments.removeWhere((payment) => payment.id == id);
     notifyListeners();
-    unawaited(_write((uid) => _financeRepository.deletePlannedPayment(uid, id)));
+    unawaited(
+      _write((uid) => _financeRepository.deletePlannedPayment(uid, id)),
+    );
     _syncReminders();
   }
 
@@ -157,14 +162,16 @@ class FinanceAppState extends ChangeNotifier {
 
     _plannedPayments.removeAt(index);
     notifyListeners();
-    unawaited(_write(
-      (uid) => _financeRepository.deletePlannedPayment(uid, payment.id),
-    ));
+    unawaited(
+      _write((uid) => _financeRepository.deletePlannedPayment(uid, payment.id)),
+    );
     _syncReminders();
   }
 
   ExpenseCategory _findCategoryForPayment(PlannedPayment payment) {
-    final categories = payment.isIncome ? _incomeCategories : _expenseCategories;
+    final categories = payment.isIncome
+        ? _incomeCategories
+        : _expenseCategories;
     for (final category in categories) {
       if (category.name == payment.categoryName) return category;
     }
@@ -241,9 +248,7 @@ class FinanceAppState extends ChangeNotifier {
 
   // Runs a Firestore write for the signed-in user, ignoring failures so a
   // slow network never blocks the UI.
-  Future<void> _write(
-    Future<void> Function(String uid) operation,
-  ) async {
+  Future<void> _write(Future<void> Function(String uid) operation) async {
     final uid = _syncedUid ?? FirebaseAuth.instance.currentUser?.uid;
     if (uid == null || uid.isEmpty) return;
     try {
@@ -305,7 +310,9 @@ class FinanceAppState extends ChangeNotifier {
       completedAt: DateTime.now(),
     );
     final updated = _shoppingItems[index];
-    unawaited(_write((uid) => _financeRepository.saveShoppingItem(uid, updated)));
+    unawaited(
+      _write((uid) => _financeRepository.saveShoppingItem(uid, updated)),
+    );
 
     ExpenseCategory? shoppingCategory;
     for (final category in _expenseCategories) {
@@ -328,6 +335,7 @@ class FinanceAppState extends ChangeNotifier {
       notifyListeners();
     }
   }
+
   List<BudgetCategory> get budgets => List.unmodifiable(_budgets);
   SavingsOverview get savingsOverview => const SavingsOverview(
     totalSavings: 0,
@@ -340,7 +348,8 @@ class FinanceAppState extends ChangeNotifier {
   double get monthlyIncome => _income;
   double get monthlyExpenses => _expenses;
   String get currencyCode => CurrencySettings.code;
-  List<String> get availableCurrencyCodes => _usdRates.keys.toList()..sort();
+  List<String> get availableCurrencyCodes =>
+      {...CurrencySettings.supportedCodes, ..._usdRates.keys}.toList()..sort();
   DateTime? get ratesUpdatedAt => _ratesUpdatedAt;
   bool get ratesLoading => _ratesLoading;
 
@@ -364,6 +373,11 @@ class FinanceAppState extends ChangeNotifier {
 
     _stopSync();
     _syncedUid = user.uid;
+
+    // Apply this user's last local choice while Firestore loads. This is also
+    // the fallback when the device is offline after sign-in.
+    await CurrencyPreferences.loadForUser(user.uid);
+    _usdRates = Map.of(CurrencySettings.usdRates);
 
     _initialLoad = _loadUserDataForUser(user.uid);
     await _initialLoad;
@@ -401,7 +415,9 @@ class FinanceAppState extends ChangeNotifier {
       _transactions
         ..clear()
         ..addAll(transactions)
-        ..sort((a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)));
+        ..sort(
+          (a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
+        );
     } catch (_) {}
 
     try {
@@ -409,7 +425,9 @@ class FinanceAppState extends ChangeNotifier {
       _plannedPayments
         ..clear()
         ..addAll(payments)
-        ..sort((a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)));
+        ..sort(
+          (a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
+        );
     } catch (_) {}
 
     try {
@@ -437,6 +455,10 @@ class FinanceAppState extends ChangeNotifier {
       if (storedCurrency != null && storedCurrency.isNotEmpty) {
         CurrencySettings.update(code: storedCurrency, rates: _usdRates);
         _currencyNeedsSetup = false;
+        unawaited(CurrencyPreferences.save(uid: uid));
+        if (storedCurrency != 'USD' && !_usdRates.containsKey(storedCurrency)) {
+          unawaited(refreshExchangeRates());
+        }
       } else {
         _currencyNeedsSetup = true;
       }
@@ -448,38 +470,36 @@ class FinanceAppState extends ChangeNotifier {
     _syncReminders();
     notifyListeners();
 
-    _transactionSubscription = _financeRepository
-        .watchTransactions(uid)
-        .listen((transactions) {
-          _transactions
-            ..clear()
-            ..addAll(transactions)
-            ..sort(
-              (a, b) =>
-                  _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
-            );
-          _recomputeTotals();
-          notifyListeners();
-        });
-    _syncStatusSubscription = _financeRepository
-        .watchSyncStatus(uid)
-        .listen((status) {
-          if (status == _syncStatus) return;
-          _syncStatus = status;
-          notifyListeners();
-        });
-    _paymentSubscription = _financeRepository
-        .watchPlannedPayments(uid)
-        .listen((payments) {
-          _plannedPayments
-            ..clear()
-            ..addAll(payments)
-            ..sort(
-              (a, b) =>
-                  _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
-            );
-          notifyListeners();
-        });
+    _transactionSubscription = _financeRepository.watchTransactions(uid).listen(
+      (transactions) {
+        _transactions
+          ..clear()
+          ..addAll(transactions)
+          ..sort(
+            (a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
+          );
+        _recomputeTotals();
+        notifyListeners();
+      },
+    );
+    _syncStatusSubscription = _financeRepository.watchSyncStatus(uid).listen((
+      status,
+    ) {
+      if (status == _syncStatus) return;
+      _syncStatus = status;
+      notifyListeners();
+    });
+    _paymentSubscription = _financeRepository.watchPlannedPayments(uid).listen((
+      payments,
+    ) {
+      _plannedPayments
+        ..clear()
+        ..addAll(payments)
+        ..sort(
+          (a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
+        );
+      notifyListeners();
+    });
     _debtSubscription = _financeRepository.watchDebts(uid).listen((debts) {
       _debts
         ..clear()
@@ -488,18 +508,17 @@ class FinanceAppState extends ChangeNotifier {
       _recomputeTotals();
       notifyListeners();
     });
-    _shoppingSubscription = _financeRepository
-        .watchShoppingItems(uid)
-        .listen((shoppingItems) {
-          _shoppingItems
-            ..clear()
-            ..addAll(shoppingItems)
-            ..sort(
-              (a, b) =>
-                  _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
-            );
-          notifyListeners();
-        });
+    _shoppingSubscription = _financeRepository.watchShoppingItems(uid).listen((
+      shoppingItems,
+    ) {
+      _shoppingItems
+        ..clear()
+        ..addAll(shoppingItems)
+        ..sort(
+          (a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
+        );
+      notifyListeners();
+    });
   }
 
   // Balance is derived from transactions plus the net effect of active or
@@ -517,8 +536,9 @@ class FinanceAppState extends ChangeNotifier {
     var debtContribution = 0.0;
     for (final debt in _debts) {
       if (debt.settlement == DebtSettlement.repaid) continue;
-      debtContribution +=
-          debt.type == DebtType.borrowed ? debt.amount : -debt.amount;
+      debtContribution += debt.type == DebtType.borrowed
+          ? debt.amount
+          : -debt.amount;
     }
     _income = income;
     _expenses = expenses;
@@ -594,8 +614,9 @@ class FinanceAppState extends ChangeNotifier {
         categories[i] = categories[i].copyWith(name: 'Missing');
       }
     }
-    final index = categories.indexWhere((category) =>
-        category.name.trim() == 'Missing');
+    final index = categories.indexWhere(
+      (category) => category.name.trim() == 'Missing',
+    );
     if (index > 0) {
       categories.insert(0, categories.removeAt(index));
     }
@@ -610,6 +631,7 @@ class FinanceAppState extends ChangeNotifier {
       _usdRates = snapshot.rates;
       _ratesUpdatedAt = snapshot.updatedAt;
       CurrencySettings.update(code: currencyCode, rates: _usdRates);
+      unawaited(CurrencyPreferences.save(uid: _syncedUid));
     } finally {
       _ratesLoading = false;
       notifyListeners();
@@ -620,6 +642,7 @@ class FinanceAppState extends ChangeNotifier {
     CurrencySettings.update(code: code, rates: _usdRates);
     _currencyNeedsSetup = false;
     notifyListeners();
+    unawaited(CurrencyPreferences.save(uid: _syncedUid));
     unawaited(_write((uid) => _financeRepository.saveCurrency(uid, code)));
   }
 
@@ -664,8 +687,8 @@ class FinanceAppState extends ChangeNotifier {
         if (!category.subcategories.contains(name)) {
           category.subcategories.add(name);
           category.userDefinedSubcategories.add(name);
-          category.subcategoryEmojis[name] = (emoji == null ||
-                  emoji.trim().isEmpty)
+          category.subcategoryEmojis[name] =
+              (emoji == null || emoji.trim().isEmpty)
               ? defaultSubcategoryEmoji(name)
               : emoji.trim();
           notifyListeners();
@@ -789,9 +812,9 @@ class FinanceAppState extends ChangeNotifier {
     notifyListeners();
 
     final transaction = _transactions.first;
-    unawaited(_write(
-      (uid) => _financeRepository.saveTransaction(uid, transaction),
-    ));
+    unawaited(
+      _write((uid) => _financeRepository.saveTransaction(uid, transaction)),
+    );
   }
 
   void updateTransaction(TransactionItem updated) {
@@ -801,13 +824,12 @@ class FinanceAppState extends ChangeNotifier {
     _recomputeTotals();
     notifyListeners();
     if (updated.id != null) {
-      unawaited(_write(
-        (uid) => _financeRepository.updateTransaction(
-          uid,
-          updated.id!,
-          updated,
+      unawaited(
+        _write(
+          (uid) =>
+              _financeRepository.updateTransaction(uid, updated.id!, updated),
         ),
-      ));
+      );
     }
   }
 

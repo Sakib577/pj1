@@ -6,6 +6,40 @@ class CurrencySettings {
 
   static String get code => _code;
   static Map<String, double> get usdRates => Map.unmodifiable(_usdRates);
+  static List<String> get supportedCodes => List.unmodifiable(const [
+    'USD',
+    'EUR',
+    'GBP',
+    'BDT',
+    'INR',
+    'JPY',
+    'CNY',
+    'KRW',
+    'CAD',
+    'AUD',
+    'NZD',
+    'CHF',
+    'AED',
+    'SAR',
+    'PKR',
+    'THB',
+    'TRY',
+    'RUB',
+    'BRL',
+    'MXN',
+    'ZAR',
+    'NGN',
+    'IDR',
+    'MYR',
+    'PHP',
+    'VND',
+    'EGP',
+    'SEK',
+    'NOK',
+    'DKK',
+    'PLN',
+    'UAH',
+  ]);
   static double get rate => _usdRates[_code] ?? 1;
 
   static void update({

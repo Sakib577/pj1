@@ -46,6 +46,18 @@ class _WalletPainter extends CustomPainter {
     final body = Paint()..color = const Color(0xFFFFAE00);
     final white = Paint()..color = Colors.white;
     canvas.scale(size.width / 220, size.height / 180);
+    // A perspective flip: the complete wallet turns around its vertical axis,
+    // rather than moving like a hinged door.
+    final flip = (progress * 2 - 1) * .32;
+    canvas.save();
+    canvas.translate(110, 90);
+    canvas.transform(
+      (Matrix4.identity()
+            ..setEntry(3, 2, .0015)
+            ..rotateY(flip))
+          .storage,
+    );
+    canvas.translate(-110, -90);
     // Main wallet body, clasp, and cut-out match the reference silhouette.
     final rect = RRect.fromRectAndRadius(
       const Rect.fromLTWH(18, 44, 178, 118),
@@ -73,18 +85,6 @@ class _WalletPainter extends CustomPainter {
       ),
       body,
     );
-    // The flap opens and closes from its left hinge.
-    canvas.save();
-    canvas.translate(40, 44);
-    canvas.rotate(-.18 * progress);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(0, -28, 140, 31),
-        const Radius.circular(20),
-      ),
-      body,
-    );
-    canvas.restore();
     final dollar = TextPainter(
       text: const TextSpan(
         text: r'$',
@@ -97,6 +97,7 @@ class _WalletPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
     dollar.paint(canvas, const Offset(78, 52));
+    canvas.restore();
   }
 
   @override

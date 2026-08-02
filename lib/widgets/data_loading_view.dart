@@ -27,7 +27,7 @@ class _DataLoadingViewState extends State<DataLoadingView>
         AnimatedBuilder(
           animation: _controller,
           builder: (_, _) => CustomPaint(
-            size: const Size(112, 82),
+            size: const Size(220, 180),
             painter: _WalletPainter(_controller.value),
           ),
         ),
@@ -43,25 +43,60 @@ class _WalletPainter extends CustomPainter {
   final double progress;
   @override
   void paint(Canvas canvas, Size size) {
-    final body = Paint()..color = const Color(0xFFF59E0B);
-    final dark = Paint()..color = const Color(0xFFB45309);
+    final body = Paint()..color = const Color(0xFFFFAE00);
+    final white = Paint()..color = Colors.white;
+    canvas.scale(size.width / 220, size.height / 180);
+    // Main wallet body, clasp, and cut-out match the reference silhouette.
     final rect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(8, 25, 96, 49),
-      const Radius.circular(13),
+      const Rect.fromLTWH(18, 44, 178, 118),
+      const Radius.circular(28),
     );
     canvas.drawRRect(rect, body);
-    canvas.save();
-    canvas.translate(16, 28);
-    canvas.rotate(-.55 * progress);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        const Rect.fromLTWH(0, -13, 78, 25),
-        const Radius.circular(10),
+        const Rect.fromLTWH(162, 81, 58, 48),
+        const Radius.circular(16),
       ),
-      dark,
+      body,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(172, 86, 48, 38),
+        const Radius.circular(13),
+      ),
+      white,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(177, 91, 43, 28),
+        const Radius.circular(11),
+      ),
+      body,
+    );
+    // The flap opens and closes from its left hinge.
+    canvas.save();
+    canvas.translate(40, 44);
+    canvas.rotate(-.18 * progress);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(0, -28, 140, 31),
+        const Radius.circular(20),
+      ),
+      body,
     );
     canvas.restore();
-    canvas.drawCircle(const Offset(82, 49), 4, Paint()..color = Colors.white);
+    final dollar = TextPainter(
+      text: const TextSpan(
+        text: r'$',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 78,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    dollar.paint(canvas, const Offset(78, 52));
   }
 
   @override

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/finance_models.dart';
 import '../state/finance_app_state.dart';
 import '../utils/currency_formatters.dart';
+import '../utils/currency_settings.dart';
 
 class SavingsPage extends StatelessWidget {
   const SavingsPage({super.key, required this.overview, required this.goals});
@@ -165,19 +166,85 @@ class SavingsPage extends StatelessWidget {
     final choice = await showModalBottomSheet<String>(
       context: context,
       builder: (sheetContext) => SafeArea(
-        child: ListTile(
-          leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
-          title: const Text(
-            'Delete goal',
-            style: TextStyle(
-              color: Color(0xFFDC2626),
-              fontWeight: FontWeight.w700,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Edit goal'),
+              onTap: () => Navigator.pop(sheetContext, 'edit'),
             ),
-          ),
-          onTap: () => Navigator.pop(sheetContext, 'delete'),
+            ListTile(
+              leading: const Icon(
+                Icons.delete_outline,
+                color: Color(0xFFDC2626),
+              ),
+              title: const Text(
+                'Delete goal',
+                style: TextStyle(
+                  color: Color(0xFFDC2626),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              onTap: () => Navigator.pop(sheetContext, 'delete'),
+            ),
+          ],
         ),
       ),
     );
+    if (choice == 'edit' && context.mounted) {
+      final title = TextEditingController(text: goal.title);
+      final target = TextEditingController(
+        text: CurrencySettings.fromUsd(goal.target).toStringAsFixed(2),
+      );
+      final saved = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Edit savings goal'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: title,
+                decoration: const InputDecoration(labelText: 'Goal name'),
+              ),
+              TextField(
+                controller: target,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(labelText: 'Target amount'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      final amount = double.tryParse(target.text.trim()) ?? 0;
+      if (saved == true &&
+          title.text.trim().isNotEmpty &&
+          amount > 0 &&
+          context.mounted) {
+        FinanceAppScope.of(context).updateSavingsGoal(
+          goal.copyWith(
+            title: title.text.trim(),
+            target: CurrencySettings.toUsd(amount),
+          ),
+        );
+      }
+      title.dispose();
+      target.dispose();
+      return;
+    }
     if (choice == 'delete' && context.mounted) {
       FinanceAppScope.of(context).deleteSavingsGoal(goal.id);
     }

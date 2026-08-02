@@ -517,6 +517,14 @@ class FinanceAppState extends ChangeNotifier {
     unawaited(_write((uid) => _financeRepository.deleteBudget(uid, id)));
   }
 
+  void updateBudget(BudgetCategory item) {
+    final index = _budgets.indexWhere((budget) => budget.id == item.id);
+    if (index == -1) return;
+    _budgets[index] = item;
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.saveBudget(uid, item)));
+  }
+
   void addSavingsGoal(String title, double target) {
     final item = SavingsGoal.fromMap(
       DateTime.now().microsecondsSinceEpoch.toString(),
@@ -531,6 +539,14 @@ class FinanceAppState extends ChangeNotifier {
     _goals.removeWhere((item) => item.id == id);
     notifyListeners();
     unawaited(_write((uid) => _financeRepository.deleteSavingsGoal(uid, id)));
+  }
+
+  void updateSavingsGoal(SavingsGoal item) {
+    final index = _goals.indexWhere((goal) => goal.id == item.id);
+    if (index == -1) return;
+    _goals[index] = item;
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.saveSavingsGoal(uid, item)));
   }
 
   void addSavingsContribution(String id, double amount) {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/finance_models.dart';
 import '../state/finance_app_state.dart';
 import '../utils/currency_formatters.dart';
+import '../utils/currency_settings.dart';
 
 class BudgetPage extends StatelessWidget {
   const BudgetPage({super.key, required this.budgets});
@@ -155,19 +156,85 @@ class BudgetPage extends StatelessWidget {
     final choice = await showModalBottomSheet<String>(
       context: context,
       builder: (sheetContext) => SafeArea(
-        child: ListTile(
-          leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
-          title: const Text(
-            'Delete budget',
-            style: TextStyle(
-              color: Color(0xFFDC2626),
-              fontWeight: FontWeight.w700,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Edit budget'),
+              onTap: () => Navigator.pop(sheetContext, 'edit'),
             ),
-          ),
-          onTap: () => Navigator.pop(sheetContext, 'delete'),
+            ListTile(
+              leading: const Icon(
+                Icons.delete_outline,
+                color: Color(0xFFDC2626),
+              ),
+              title: const Text(
+                'Delete budget',
+                style: TextStyle(
+                  color: Color(0xFFDC2626),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              onTap: () => Navigator.pop(sheetContext, 'delete'),
+            ),
+          ],
         ),
       ),
     );
+    if (choice == 'edit' && context.mounted) {
+      final name = TextEditingController(text: item.label);
+      final limit = TextEditingController(
+        text: CurrencySettings.fromUsd(item.limit).toStringAsFixed(2),
+      );
+      final saved = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Edit budget'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: name,
+                decoration: const InputDecoration(labelText: 'Category name'),
+              ),
+              TextField(
+                controller: limit,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(labelText: 'Monthly limit'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      final amount = double.tryParse(limit.text.trim()) ?? 0;
+      if (saved == true &&
+          name.text.trim().isNotEmpty &&
+          amount > 0 &&
+          context.mounted) {
+        FinanceAppScope.of(context).updateBudget(
+          item.copyWith(
+            label: name.text.trim(),
+            limit: CurrencySettings.toUsd(amount),
+          ),
+        );
+      }
+      name.dispose();
+      limit.dispose();
+      return;
+    }
     if (choice == 'delete' && context.mounted) {
       FinanceAppScope.of(context).deleteBudget(item.id);
     }

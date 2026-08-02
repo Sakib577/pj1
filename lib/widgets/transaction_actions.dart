@@ -288,39 +288,59 @@ Future<void> showPlannedPaymentActions(
     final amount = TextEditingController(
       text: CurrencySettings.fromUsd(payment.amount).toStringAsFixed(2),
     );
+    var startDate = payment.startDate;
     final saved = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Edit planned payment'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: title,
-              decoration: const InputDecoration(labelText: 'Title'),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Edit planned payment'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: title,
+                decoration: const InputDecoration(labelText: 'Title'),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.event_outlined),
+                title: Text(
+                  '${startDate.day}/${startDate.month}/${startDate.year}',
+                ),
+                trailing: const Icon(Icons.edit_calendar_outlined),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: dialogContext,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                    initialDate: startDate,
+                  );
+                  if (picked != null) setDialogState(() => startDate = picked);
+                },
+              ),
+              TextField(
+                controller: amount,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Amount',
+                  prefixText: '${CurrencySettings.symbol} ',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
             ),
-            TextField(
-              controller: amount,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(
-                labelText: 'Amount',
-                prefixText: '${CurrencySettings.symbol} ',
-              ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
     final value = double.tryParse(amount.text.trim()) ?? 0;
@@ -332,6 +352,7 @@ Future<void> showPlannedPaymentActions(
         payment.copyWith(
           title: title.text.trim(),
           amount: CurrencySettings.toUsd(value),
+          startDate: startDate,
         ),
       );
     }

@@ -264,7 +264,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 _navIndex == 1
                     ? 'Budget'
                     : _navIndex == 2
-                    ? 'Savings Goals'
+                    ? 'Savings'
                     : 'Profile & Settings',
                 style: const TextStyle(
                   fontSize: 20,
@@ -595,7 +595,7 @@ class _AppDrawer extends StatelessWidget {
             ),
             _DrawerNavigationItem(
               icon: Icons.savings_outlined,
-              label: 'Savings Goals',
+              label: 'Savings',
               selected: selectedIndex == 2,
               onTap: () => onNavigate(2),
             ),

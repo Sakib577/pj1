@@ -830,6 +830,7 @@ class PlannedPayment {
   PlannedPayment copyWith({
     String? title,
     double? amount,
+    DateTime? startDate,
     DateTime? createdAt,
     DateTime? lastConfirmedDate,
   }) => PlannedPayment(
@@ -844,7 +845,7 @@ class PlannedPayment {
     isIncome: isIncome,
     repeat: repeat,
     customEveryDays: customEveryDays,
-    startDate: startDate,
+    startDate: startDate ?? this.startDate,
     createdAt: createdAt ?? this.createdAt,
     lastConfirmedDate: lastConfirmedDate ?? this.lastConfirmedDate,
   );
@@ -992,19 +993,26 @@ class BudgetCategory {
   final DateTime startDate;
   final int customDays;
 
-  BudgetCategory copyWith({double? spent}) => BudgetCategory(
+  BudgetCategory copyWith({
+    double? spent,
+    String? label,
+    double? limit,
+    String? period,
+    int? customDays,
+    DateTime? startDate,
+  }) => BudgetCategory(
     id: id,
-    label: label,
+    label: label ?? this.label,
     spent: spent ?? this.spent,
-    limit: limit,
+    limit: limit ?? this.limit,
     daysLeft: daysLeft,
     status: status,
     statusColor: statusColor,
     icon: icon,
     iconBg: iconBg,
-    period: period,
-    startDate: startDate,
-    customDays: customDays,
+    period: period ?? this.period,
+    startDate: startDate ?? this.startDate,
+    customDays: customDays ?? this.customDays,
   );
 
   Map<String, dynamic> toMap() => {
@@ -1075,8 +1083,13 @@ class SavingsGoal {
   final Color statusColor;
   final Color statusBg;
 
-  SavingsGoal copyWith({double? current}) =>
-      SavingsGoal.fromMap(id, {...toMap(), 'current': current ?? this.current});
+  SavingsGoal copyWith({double? current, String? title, double? target}) =>
+      SavingsGoal.fromMap(id, {
+        ...toMap(),
+        'current': current ?? this.current,
+        'title': title ?? this.title,
+        'target': target ?? this.target,
+      });
 
   Map<String, dynamic> toMap() => {
     'title': title,

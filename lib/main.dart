@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -12,9 +11,10 @@ import 'services/currency_preferences.dart';
 import 'state/finance_app_state.dart';
 import 'widgets/app_lock_gate.dart';
 
-// Global error handler flags — keep at top level so they survive hot restart.
+// Global error handler flag — keep at top level so it survives hot restart.
+// Holds the most recent crash message so the UI can render it instead of a
+// white/frozen screen in release builds.
 String? _lastError;
-FlutterErrorDetails? _lastErrorDetails;
 
 /// Catches **all** unhandled errors (sync + async) and renders a red error
 /// screen instead of a white/frozen screen in release builds.
@@ -24,7 +24,6 @@ void _setupGlobalErrorHandlers() {
   FlutterError.onError = (FlutterErrorDetails details) {
     // In release mode, show a visible screen AND still call the original
     // handler so the error still reaches the console / platform dispatcher.
-    _lastErrorDetails = details;
     _lastError = details.exceptionAsString();
     originalOnError?.call(details);
   };
@@ -50,7 +49,6 @@ void _setupGlobalErrorHandlers() {
     },
     (Object error, StackTrace stack) {
       _lastError = '$error\n\n$stack';
-      _lastErrorDetails = null;
       // Re-run the app with the error visible (the root widget checks for this).
       runApp(const MyApp());
     },
@@ -139,7 +137,6 @@ class _ErrorScreen extends StatelessWidget {
                 FilledButton.icon(
                   onPressed: () {
                     _lastError = null;
-                    _lastErrorDetails = null;
                     main();
                   },
                   icon: const Icon(Icons.refresh),

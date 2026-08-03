@@ -5,6 +5,7 @@ import '../state/finance_app_state.dart';
 import '../utils/currency_formatters.dart';
 import '../utils/currency_settings.dart';
 import '../widgets/empty_state_card.dart';
+import '../widgets/morphing_fab.dart';
 
 class ShoppingListPage extends StatefulWidget {
   const ShoppingListPage({super.key});
@@ -126,12 +127,9 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
         ),
         centerTitle: true,
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: MorphingFab(
+        label: 'Add Item',
         onPressed: _openAddPage,
-        backgroundColor: const Color(0xFFF59E0B),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Item'),
       ),
       body: ListView(
         physics: const BouncingScrollPhysics(),

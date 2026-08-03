@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/finance_models.dart';
 import '../state/finance_app_state.dart';
 import '../widgets/category_logo.dart';
+import '../widgets/morphing_fab.dart';
 import 'category_detail_page.dart';
 
 class CategoriesPage extends StatefulWidget {
@@ -33,12 +34,9 @@ class _CategoriesPageState extends State<CategoriesPage> {
         title: const Text('Categories'),
         centerTitle: true,
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: MorphingFab(
+        label: 'New category',
         onPressed: () => _addCategory(context, state),
-        backgroundColor: const Color(0xFFF59E0B),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('New category'),
       ),
       body: Column(
         children: [

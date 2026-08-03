@@ -4,6 +4,7 @@ import '../models/finance_models.dart';
 import '../state/finance_app_state.dart';
 import '../utils/currency_settings.dart';
 import '../widgets/empty_state_card.dart';
+import '../widgets/morphing_fab.dart';
 import '../widgets/planned_payment_card.dart';
 import '../widgets/transaction_actions.dart';
 import 'categories_page.dart';
@@ -44,12 +45,9 @@ class _PlannedPaymentsPageState extends State<PlannedPaymentsPage> {
         ),
         centerTitle: true,
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: MorphingFab(
+        label: 'Add payment',
         onPressed: _openAddPage,
-        backgroundColor: const Color(0xFFF59E0B),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Add payment'),
       ),
       body: payments.isEmpty
           ? const Padding(

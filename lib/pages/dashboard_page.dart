@@ -20,6 +20,7 @@ import 'package:pj1/utils/currency_formatters.dart';
 import 'package:pj1/widgets/empty_state_card.dart';
 import 'package:pj1/widgets/data_loading_view.dart';
 import 'package:pj1/widgets/app_lock_gate.dart';
+import 'package:pj1/widgets/morphing_fab.dart';
 import 'package:pj1/widgets/planned_payment_card.dart';
 import 'package:pj1/widgets/transaction_actions.dart';
 import 'package:pj1/widgets/transaction_tile.dart';
@@ -33,12 +34,21 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _navBarKey = GlobalKey();
+  double _navBarHeight = 80;
   late FinanceAppState _appState;
   bool _categoriesSynced = false;
   bool _dueCheckDone = false;
 
   // Controls which bottom-tab page is currently visible.
   int _navIndex = 0;
+
+  void _measureNavBar() {
+    final h = _navBarKey.currentContext?.size?.height;
+    if (h != null && (h - _navBarHeight).abs() > 0.5) {
+      setState(() => _navBarHeight = h);
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -53,9 +63,9 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _initUserData() async {
     await _appState.syncUserData();
     if (!mounted) return;
-    while (mounted && !context.appLockUnlocked) {
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-    }
+    // Wait for the biometric verification before showing any prompts so the
+    // "Payments due" dialog never appears ahead of the lock screen.
+    await context.appLockUnlockReady;
     if (!mounted) return;
     await _promptDefaultCurrencyIfNeeded();
     await _checkDuePayments();
@@ -272,10 +282,10 @@ class _DashboardPageState extends State<DashboardPage> {
     final stats = appState.stats;
     final transactions = appState.transactions;
     final isHome = _navIndex == 0;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureNavBar());
     Widget? actionFab;
     if (isHome) {
-      actionFab = FloatingActionButton(
-        key: const ValueKey('home-fab'),
+      actionFab = MorphingFab(
         onPressed: () async {
           final messenger = ScaffoldMessenger.of(context);
           final saved = await Navigator.of(context).push<bool>(
@@ -290,44 +300,35 @@ class _DashboardPageState extends State<DashboardPage> {
             );
           }
         },
-        backgroundColor: const Color(0xFFF59E0B),
-        child: const Icon(Icons.add, color: Colors.white),
       );
     } else if (_navIndex == 1) {
-      actionFab = FloatingActionButton.extended(
-        key: const ValueKey('budget-fab'),
+      actionFab = MorphingFab(
+        label: 'New budget',
         onPressed: () => showCreateBudgetDialog(context),
-        backgroundColor: const Color(0xFFF59E0B),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('New budget'),
       );
     } else if (_navIndex == 2) {
-      actionFab = FloatingActionButton.extended(
-        key: const ValueKey('savings-fab'),
+      actionFab = MorphingFab(
+        label: 'New goal',
         onPressed: () => showCreateSavingsGoalDialog(context),
-        backgroundColor: const Color(0xFFF59E0B),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('New goal'),
       );
     } else if (_navIndex == 3) {
-      actionFab = FloatingActionButton.extended(
-        key: const ValueKey('debt-fab'),
+      actionFab = MorphingFab(
+        label: 'Add Debt',
         onPressed: _openAddDebtPage,
-        backgroundColor: const Color(0xFFF59E0B),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Debt'),
       );
     }
 
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: AppBar(
-        toolbarHeight: 72,
-        automaticallyImplyLeading: false,
-        centerTitle: !isHome,
+    // Screen-level Stack so the FAB overlay can dip into the bottom bar's
+    // notch (matching the original centerDocked placement of the Home button)
+    // while still flying across the bar on tab switches.
+    return Stack(
+      children: [
+        Scaffold(
+          key: _scaffoldKey,
+          appBar: AppBar(
+            toolbarHeight: 72,
+            automaticallyImplyLeading: false,
+            centerTitle: !isHome,
         leading: isHome
             ? null
             : IconButton(
@@ -424,8 +425,10 @@ class _DashboardPageState extends State<DashboardPage> {
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: TransactionTile(
                                   item: item,
-                                  onTap: () =>
-                                      showTransactionActions(context, item),
+                                  onTap: () => showTransactionActions(
+                                    context,
+                                    item,
+                                  ),
                                 ),
                               ),
                             ),
@@ -479,19 +482,6 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ],
       ),
-      floatingActionButton: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 260),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(scale: animation, child: child),
-        ),
-        child: actionFab ?? const SizedBox.shrink(key: ValueKey('no-fab')),
-      ),
-      floatingActionButtonLocation: isHome
-          ? FloatingActionButtonLocation.centerDocked
-          : FloatingActionButtonLocation.endFloat,
       drawer: _AppDrawer(
         selectedIndex: _navIndex,
         onNavigate: (index) {
@@ -522,10 +512,32 @@ class _DashboardPageState extends State<DashboardPage> {
         },
       ),
       bottomNavigationBar: _BottomNavBar(
+        key: _navBarKey,
         currentIndex: _navIndex,
         onTap: _onNavTap,
         showFab: isHome,
       ),
+        ),
+        Positioned.fill(
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(end: isHome ? 0 : 1),
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeInOutCubic,
+            child: actionFab ?? const SizedBox.shrink(),
+            builder: (context, t, child) {
+              final navH = _navBarHeight;
+              final bottom = navH - 28 + 44 * t;
+              return Align(
+                alignment: Alignment(t, 1),
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: bottom, right: 16 * t),
+                  child: child,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -954,6 +966,7 @@ class _SectionHeader extends StatelessWidget {
 
 class _BottomNavBar extends StatelessWidget {
   const _BottomNavBar({
+    super.key,
     required this.currentIndex,
     required this.onTap,
     required this.showFab,

@@ -262,11 +262,14 @@ class FinanceRepository {
   // --- Currency settings ---
 
   Future<String?> loadCurrency(String uid) async {
+    // Default source (server-first, cached fallback) so the stored currency is
+    // restored from Firestore after a reinstall clears the local cache, while
+    // still working from cache when offline.
     final doc = await _doc(
       uid,
       'settings',
       'currency',
-    ).get(const GetOptions(source: Source.cache));
+    ).get();
     if (!doc.exists) return null;
     return (doc.data()?['code'] as String?)?.trim();
   }
@@ -282,7 +285,7 @@ class FinanceRepository {
       uid,
       'settings',
       'preferences',
-    ).get(const GetOptions(source: Source.cache));
+    ).get();
     return doc.data() ?? const {};
   }
 

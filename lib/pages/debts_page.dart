@@ -62,28 +62,13 @@ class _DebtsPageState extends State<DebtsPage> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: _DebtTotalCard(
-                  label: _statusIndex == 0
-                      ? 'Total borrowed'
-                      : 'Closed borrowed',
-                  amount: borrowedTotal,
-                  icon: Icons.arrow_downward_rounded,
-                  color: const Color(0xFFDC2626),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _DebtTotalCard(
-                  label: _statusIndex == 0 ? 'Total lent' : 'Closed lent',
-                  amount: lentTotal,
-                  icon: Icons.arrow_upward_rounded,
-                  color: const Color(0xFF16A34A),
-                ),
-              ),
-            ],
+          child: _DebtTotalsCard(
+            borrowedLabel: _statusIndex == 0
+                ? 'Total borrowed'
+                : 'Closed borrowed',
+            borrowedAmount: borrowedTotal,
+            lentLabel: _statusIndex == 0 ? 'Total lent' : 'Closed lent',
+            lentAmount: lentTotal,
           ),
         ),
         Padding(
@@ -168,54 +153,127 @@ class _DebtsPageState extends State<DebtsPage> {
   }
 }
 
-class _DebtTotalCard extends StatelessWidget {
-  const _DebtTotalCard({
+class _DebtTotalsCard extends StatelessWidget {
+  const _DebtTotalsCard({
+    required this.borrowedLabel,
+    required this.borrowedAmount,
+    required this.lentLabel,
+    required this.lentAmount,
+  });
+
+  final String borrowedLabel;
+  final double borrowedAmount;
+  final String lentLabel;
+  final double lentAmount;
+
+  @override
+  Widget build(BuildContext context) {
+    // Orange summary card matching the savings page's "Total Savings" card.
+    // Height is fixed so the card never changes size with the amounts.
+    return Container(
+      width: double.infinity,
+      height: 128,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF9F0A),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33F59E0B),
+            blurRadius: 16,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _DebtTotalColumn(
+              label: borrowedLabel,
+              amount: borrowedAmount,
+              icon: Icons.arrow_downward_rounded,
+            ),
+          ),
+          Container(
+            width: 1,
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            color: Colors.white24,
+          ),
+          Expanded(
+            child: _DebtTotalColumn(
+              label: lentLabel,
+              amount: lentAmount,
+              icon: Icons.arrow_upward_rounded,
+              alignEnd: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DebtTotalColumn extends StatelessWidget {
+  const _DebtTotalColumn({
     required this.label,
     required this.amount,
     required this.icon,
-    required this.color,
+    this.alignEnd = false,
   });
 
   final String label;
   final double amount;
   final IconData icon;
-  final Color color;
+  final bool alignEnd;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-          ),
-          const SizedBox(height: 2),
-          FittedBox(
+    final cross = alignEnd
+        ? CrossAxisAlignment.end
+        : CrossAxisAlignment.start;
+    return Column(
+      crossAxisAlignment: cross,
+      children: [
+        Row(
+          mainAxisAlignment: alignEnd
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          children: [
+            Icon(icon, color: Colors.white, size: 16),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Expanded(
+          child: FittedBox(
             fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
+            alignment: alignEnd
+                ? Alignment.centerRight
+                : Alignment.centerLeft,
             child: Text(
               formatCurrency(amount),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 30,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

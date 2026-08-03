@@ -176,6 +176,11 @@ class _SavingsPageState extends State<SavingsPage> {
               onTap: () => Navigator.pop(sheetContext, 'edit'),
             ),
             ListTile(
+              leading: const Icon(Icons.remove_circle_outline),
+              title: const Text('Withdraw funds'),
+              onTap: () => Navigator.pop(sheetContext, 'withdraw'),
+            ),
+            ListTile(
               leading: const Icon(
                 Icons.delete_outline,
                 color: Color(0xFFDC2626),
@@ -193,6 +198,35 @@ class _SavingsPageState extends State<SavingsPage> {
         ),
       ),
     );
+    if (choice == 'withdraw' && context.mounted) {
+      final amount = TextEditingController();
+      final saved = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('Withdraw from ${goal.title}'),
+          content: TextField(
+            controller: amount,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: 'Amount (max ${formatCurrencyNoCents(goal.current)})',
+              prefixText: '${CurrencySettings.symbol} ',
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Withdraw')),
+          ],
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      final value = double.tryParse(amount.text.trim()) ?? 0;
+      if (saved == true && value > 0 && value <= CurrencySettings.fromUsd(goal.current) && context.mounted) {
+        FinanceAppScope.of(context).withdrawSavingsContribution(goal.id, value);
+      }
+      amount.dispose();
+      return;
+    }
     if (choice == 'edit' && context.mounted) {
       final title = TextEditingController(text: goal.title);
       final target = TextEditingController(
@@ -409,12 +443,12 @@ class _SavingsGoalCard extends StatelessWidget {
         : (goal.current / goal.target).clamp(0.0, 1.0);
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: const [
             BoxShadow(
               color: Color(0x0F000000),
@@ -429,15 +463,15 @@ class _SavingsGoalCard extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     color: goal.iconBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(goal.icon, color: goal.iconColor, size: 24),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -463,15 +497,17 @@ class _SavingsGoalCard extends StatelessWidget {
                   ),
                 ),
                 Flexible(
-                  child: Text(
-                    '${formatCurrencyNoCents(goal.current)} / ${formatCurrencyNoCents(goal.target)}',
-                    textAlign: TextAlign.right,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF334155),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      '${formatCurrencyNoCents(goal.current)} / ${formatCurrencyNoCents(goal.target)}',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF334155),
+                      ),
                     ),
                   ),
                 ),

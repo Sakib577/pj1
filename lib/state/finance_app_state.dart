@@ -553,6 +553,34 @@ class FinanceAppState extends ChangeNotifier {
     );
   }
 
+  void withdrawSavingsContribution(String id, double amount) {
+    final index = _goals.indexWhere((goal) => goal.id == id);
+    final amountUsd = CurrencySettings.toUsd(amount);
+    if (index == -1 || amountUsd <= 0 || amountUsd > _goals[index].current) {
+      return;
+    }
+    _goals[index] = _goals[index].copyWith(
+      current: _goals[index].current - amountUsd,
+    );
+    notifyListeners();
+    unawaited(
+      _write((uid) => _financeRepository.saveSavingsGoal(uid, _goals[index])),
+    );
+    _recordTransaction(
+      amountUsd: amountUsd,
+      icon: Icons.savings_outlined,
+      iconColor: const Color(0xFF16A34A),
+      isIncome: true,
+      category: ExpenseCategory(
+        id: 'savings',
+        name: 'Savings',
+        icon: Icons.savings_outlined,
+        subcategories: const [],
+      ),
+      note: 'Withdrawn from ${_goals[index].title}',
+    );
+  }
+
   double get currentBalance => _balance;
   double get monthlyIncome => _income;
   double get monthlyExpenses => _expenses;

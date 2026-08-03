@@ -9,6 +9,7 @@ import '../services/currency_preferences.dart';
 import '../services/exchange_rate_service.dart';
 import '../services/finance_repository.dart';
 import '../services/payment_reminder_service.dart';
+import '../utils/currency_formatters.dart';
 import '../utils/currency_settings.dart';
 
 class FinanceAppState extends ChangeNotifier {
@@ -130,10 +131,6 @@ class FinanceAppState extends ChangeNotifier {
       _write((uid) => _financeRepository.savePlannedPayment(uid, payment)),
     );
     _syncReminders();
-    _addNotification(
-      'Planned payment added',
-      '${payment.title} has been scheduled.',
-    );
   }
 
   void removePlannedPayment(String id) {
@@ -433,20 +430,51 @@ class FinanceAppState extends ChangeNotifier {
 
   List<SavingsGoal> get savingsGoals => List.unmodifiable(_goals);
   List<AppNotification> get notifications {
-    final result = List<AppNotification>.from(_notifications)
+    final result = _notifications
+        .where((item) => item.title != 'Planned payment added')
+        .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final now = DateTime.now();
+    for (final payment in _plannedPayments) {
+      final due = payment.nextDue();
+      final dueDate = DateTime(due.year, due.month, due.day, 9);
+      final dueToday = due.year == now.year &&
+          due.month == now.month &&
+          due.day == now.day;
+      if (dueToday) {
+        result.add(
+          AppNotification(
+            id: '${payment.id}:due:${dueDate.millisecondsSinceEpoch}',
+            title: 'Payment due today',
+            body:
+                '${payment.title} · ${payment.isIncome ? '+' : '-'}'
+                '${formatCurrency(payment.amount)}',
+            createdAt: dueDate,
+          ),
+        );
+      }
+      if (!dueToday && dueDate.isAfter(now)) {
+        final daysUntilDue = DateTime(due.year, due.month, due.day)
+            .difference(DateTime(now.year, now.month, now.day))
+            .inDays;
+        if (daysUntilDue == 1 || daysUntilDue == 2) {
+          result.add(
+            AppNotification(
+              id: '${payment.id}:upcoming:$daysUntilDue:${dueDate.millisecondsSinceEpoch}',
+              title: 'Payment coming up in $daysUntilDue ${daysUntilDue == 1 ? 'day' : 'days'}',
+              body:
+                  '${payment.title} is due in $daysUntilDue '
+                  '${daysUntilDue == 1 ? 'day' : 'days'} · '
+                  '${payment.isIncome ? '+' : '-'}'
+                  '${formatCurrency(payment.amount)}',
+              createdAt: dueDate.subtract(Duration(days: daysUntilDue)),
+            ),
+          );
+        }
+      }
+    }
+    result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return List.unmodifiable(result);
-  }
-
-  void _addNotification(String title, String body) {
-    final item = AppNotification(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      title: title,
-      body: body,
-      createdAt: DateTime.now(),
-    );
-    _notifications.insert(0, item);
-    unawaited(_write((uid) => _financeRepository.saveNotification(uid, item)));
   }
 
   bool _isInBudgetPeriod(DateTime? date, BudgetCategory budget) {

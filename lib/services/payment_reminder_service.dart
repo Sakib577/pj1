@@ -19,6 +19,7 @@ class PaymentReminderService {
       'Reminders for upcoming planned payments';
   static const int _reminderHour = 9;
   static const int _reminderIdOffset = 100000;
+  static const int _tomorrowIdOffset = 300000;
   static const int _dueIdOffset = 200000;
 
   final FlutterLocalNotificationsPlugin _plugin =
@@ -80,7 +81,7 @@ class PaymentReminderService {
         await _schedule(
           id: _dueIdOffset + _stableId(payment.id),
           date: dueDate,
-          title: 'Due today',
+          title: 'Payment due today',
           body:
               '${payment.title} · ${payment.isIncome ? '+' : '-'}'
               '${formatCurrency(payment.amount)}',
@@ -91,9 +92,21 @@ class PaymentReminderService {
         await _schedule(
           id: _reminderIdOffset + _stableId(payment.id),
           date: reminderDate,
-          title: 'Payment coming up',
+          title: 'Payment coming up in 2 days',
           body:
               '${payment.title} is due in 2 days · '
+              '${payment.isIncome ? '+' : '-'}'
+              '${formatCurrency(payment.amount)}',
+        );
+      }
+      final tomorrowDate = dueDate.subtract(const Duration(days: 1));
+      if (tomorrowDate.isAfter(now)) {
+        await _schedule(
+          id: _tomorrowIdOffset + _stableId(payment.id),
+          date: tomorrowDate,
+          title: 'Payment coming up in 1 day',
+          body:
+              '${payment.title} is due tomorrow · '
               '${payment.isIncome ? '+' : '-'}'
               '${formatCurrency(payment.amount)}',
         );

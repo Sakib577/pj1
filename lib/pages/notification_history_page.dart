@@ -23,10 +23,6 @@ class NotificationHistoryPage extends StatelessWidget {
                   ),
                   title: Text(item.title),
                   subtitle: Text(item.body),
-                  trailing: Text(
-                    '${item.createdAt.day}/${item.createdAt.month}',
-                    style: const TextStyle(fontSize: 12),
-                  ),
                 );
               },
             ),

@@ -119,6 +119,7 @@ class _SavingsPageState extends State<SavingsPage> {
         ],
       ),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
     final amount = double.tryParse(target.text.trim()) ?? 0;
     if (saved == true &&
         title.text.trim().isNotEmpty &&
@@ -154,6 +155,7 @@ class _SavingsPageState extends State<SavingsPage> {
         ],
       ),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
     final value = double.tryParse(amount.text.trim()) ?? 0;
     if (saved == true && value > 0 && context.mounted) {
       FinanceAppScope.of(context).addSavingsContribution(goal.id, value);
@@ -228,6 +230,7 @@ class _SavingsPageState extends State<SavingsPage> {
           ],
         ),
       );
+      await Future<void>.delayed(const Duration(milliseconds: 300));
       final amount = double.tryParse(target.text.trim()) ?? 0;
       if (saved == true &&
           title.text.trim().isNotEmpty &&
@@ -426,13 +429,13 @@ class _SavingsGoalCard extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  width: 64,
-                  height: 64,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     color: goal.iconBg,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(goal.icon, color: goal.iconColor, size: 30),
+                  child: Icon(goal.icon, color: goal.iconColor, size: 24),
                 ),
                 const SizedBox(width: 14),
                 Expanded(

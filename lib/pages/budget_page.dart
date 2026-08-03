@@ -135,6 +135,7 @@ class BudgetPage extends StatelessWidget {
         ),
       ),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
     final amount = double.tryParse(limit.text.trim()) ?? 0;
     if (saved == true &&
         name.text.trim().isNotEmpty &&
@@ -219,6 +220,7 @@ class BudgetPage extends StatelessWidget {
           ],
         ),
       );
+      await Future<void>.delayed(const Duration(milliseconds: 300));
       final amount = double.tryParse(limit.text.trim()) ?? 0;
       if (saved == true &&
           name.text.trim().isNotEmpty &&

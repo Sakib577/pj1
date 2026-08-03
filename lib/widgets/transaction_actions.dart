@@ -196,15 +196,24 @@ Future<TransactionItem?> promptEditTransaction(
     ),
   );
 
-  controller.dispose();
-  noteController.dispose();
+  await Future<void>.delayed(const Duration(milliseconds: 300));
 
-  if (saved != true) return null;
+  if (saved != true) {
+    controller.dispose();
+    noteController.dispose();
+    return null;
+  }
   final parsed = double.tryParse(controller.text.trim()) ?? 0;
-  if (parsed <= 0) return null;
+  if (parsed <= 0) {
+    controller.dispose();
+    noteController.dispose();
+    return null;
+  }
 
   final amountUsd = CurrencySettings.toUsd(parsed.abs());
   final note = noteController.text.trim();
+  controller.dispose();
+  noteController.dispose();
   final now = item.createdAt ?? DateTime.now();
   return TransactionItem(
     id: item.id,
@@ -343,6 +352,7 @@ Future<void> showPlannedPaymentActions(
         ),
       ),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
     final value = double.tryParse(amount.text.trim()) ?? 0;
     if (saved == true &&
         value > 0 &&

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import 'auth_gate.dart';
 import 'firebase_options.dart';
@@ -45,9 +46,29 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   late final FinanceAppState _appState = FinanceAppState();
+  int _stateRevision = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _appState.addListener(_onAppStateChanged);
+  }
+
+  void _onAppStateChanged() {
+    if (!mounted) return;
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _stateRevision++);
+      });
+    } else {
+      setState(() => _stateRevision++);
+    }
+  }
 
   @override
   void dispose() {
+    _appState.removeListener(_onAppStateChanged);
     _appState.dispose();
     super.dispose();
   }
@@ -56,13 +77,8 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     const seed = Color(0xFFF59E0B);
     return FinanceAppScope(
-      notifier: _appState,
-      // FinanceAppScope is an InheritedNotifier, so every page that reads the
-      // state through FinanceAppScope.of(context) is rebuilt automatically when
-      // the state changes (including pushed routes, which a root ListenableBuilder
-      // could not reach because Navigator caches route widgets). The state defers
-      // its notifyListeners() to after the frame, which keeps this safe during
-      // route/dialog transitions.
+      state: _appState,
+      revision: _stateRevision,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Expense Tracker',

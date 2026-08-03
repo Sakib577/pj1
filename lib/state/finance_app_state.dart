@@ -46,9 +46,6 @@ class FinanceAppState extends ChangeNotifier {
   StreamSubscription<List<BudgetCategory>>? _budgetSubscription;
   StreamSubscription<List<SavingsGoal>>? _goalSubscription;
   StreamSubscription<List<AppNotification>>? _notificationSubscription;
-  bool _notifyScheduled = false;
-  Timer? _notifyTimer;
-  bool _disposed = false;
   bool _currencyNeedsSetup = false;
   SyncStatus _syncStatus = SyncStatus.synced;
   bool _paymentNotificationsEnabled = true;
@@ -66,31 +63,8 @@ class FinanceAppState extends ChangeNotifier {
   bool get hasPendingSync => _syncStatus == SyncStatus.pending;
   bool get isLoadingData => _isLoadingData;
 
-  // FinanceAppScope is an InheritedNotifier and every page depends on it, so a
-  // notifyListeners() during the framework's build/layout phase (e.g. an async
-  // Firestore write completing mid-route-transition, or right after a dialog /
-  // bottom sheet closes during its pop animation) can trip Flutter's
-  // InheritedElement '_dependents.isEmpty' assertion. Always defer the
-  // notification to just after the frame so dependents are never rebuilt while
-  // the element tree is mid-deactivation. Coalesce bursts that fall in the same
-  // frame.
-  @override
-  void notifyListeners() {
-    if (_notifyScheduled) return;
-    _notifyScheduled = true;
-    // Give route/dialog deactivation (especially a closing AlertDialog) time
-    // to finish before InheritedNotifier marks its dependents dirty.
-    _notifyTimer = Timer(const Duration(milliseconds: 350), () {
-      _notifyScheduled = false;
-      if (_disposed) return;
-      super.notifyListeners();
-    });
-  }
-
   @override
   void dispose() {
-    _disposed = true;
-    _notifyTimer?.cancel();
     _stopSync();
     super.dispose();
   }
@@ -1494,25 +1468,28 @@ class FinanceAppState extends ChangeNotifier {
   ];
 }
 
-// FinanceAppScope is an InheritedNotifier that exposes the shared
-// FinanceAppState. Every widget that calls FinanceAppScope.of(context) becomes
-// a dependent and is rebuilt automatically when the notifier fires — including
-// pushed routes, which the root-level ListenableBuilder approach could not
-// reach (Navigator caches route widgets, so only the home route rebuilt).
-// The '_dependents.isEmpty' assertion is avoided by FinanceAppState deferring
-// every notifyListeners() to just after the current frame (see the override at
-// the top of this file), so dependents are never marked dirty while the element
-// tree is mid-deactivation (route/dialog pop).
-class FinanceAppScope extends InheritedNotifier<FinanceAppState> {
+// Exposes the shared state to every route. The root app owns the ChangeNotifier
+// listener and updates this scope, rather than using InheritedNotifier directly.
+// This avoids Flutter deactivating an inherited notifier while a dialog route
+// still has registered dependents.
+class FinanceAppScope extends InheritedWidget {
   const FinanceAppScope({
     super.key,
-    required FinanceAppState notifier,
+    required this.state,
+    required this.revision,
     required super.child,
-  }) : super(notifier: notifier);
+  });
+
+  final FinanceAppState state;
+  final int revision;
 
   static FinanceAppState of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<FinanceAppScope>();
     assert(scope != null, 'FinanceAppScope not found in widget tree.');
-    return scope!.notifier!;
+    return scope!.state;
   }
+
+  @override
+  bool updateShouldNotify(FinanceAppScope oldWidget) =>
+      revision != oldWidget.revision;
 }

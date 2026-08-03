@@ -9,7 +9,9 @@ import '../services/currency_preferences.dart';
 import '../services/exchange_rate_service.dart';
 import '../services/finance_repository.dart';
 import '../services/payment_reminder_service.dart';
+import '../services/biometric_lock_service.dart';
 import '../utils/currency_settings.dart';
+import '../utils/currency_formatters.dart';
 
 class FinanceAppState extends ChangeNotifier {
   double _balance = 0;
@@ -434,13 +436,30 @@ class FinanceAppState extends ChangeNotifier {
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     for (final payment in _plannedPayments) {
-      for (final plan in PaymentReminderService.buildReminderPlan(payment)) {
+      final due = payment.nextDue();
+      final dueDay = DateTime(due.year, due.month, due.day);
+      final today = DateTime.now();
+      final todayDay = DateTime(today.year, today.month, today.day);
+      for (final daysBefore in [2, 1, 0]) {
+        final reminderDay = dueDay.subtract(Duration(days: daysBefore));
+        // Do not show a future due-day reminder as "due today". A one-day
+        // reminder for tomorrow is valid and should be visible today.
+        if (reminderDay.isAfter(todayDay)) continue;
+        final title = daysBefore == 0
+            ? 'Payment due today'
+            : 'Payment coming up in $daysBefore '
+                  '${daysBefore == 1 ? 'day' : 'days'}';
+        final amount = formatCurrency(payment.amount);
+        final sign = payment.isIncome ? '+' : '-';
         result.add(
           AppNotification(
-            id: '${payment.id}:${plan.daysBefore}:${plan.date.millisecondsSinceEpoch}',
-            title: plan.title,
-            body: plan.body,
-            createdAt: plan.date,
+            id: '${payment.id}:$daysBefore:${reminderDay.millisecondsSinceEpoch}',
+            title: title,
+            body: daysBefore == 0
+                ? '${payment.title} · $sign$amount'
+                : '${payment.title} is due in $daysBefore '
+                      '${daysBefore == 1 ? 'day' : 'days'} · $sign$amount',
+            createdAt: reminderDay,
           ),
         );
       }
@@ -954,7 +973,13 @@ class FinanceAppState extends ChangeNotifier {
                     ? category.copyWith(icon: Icons.card_giftcard_rounded)
                     : category,
               )
-            : source,
+            : source.map(
+                (category) => category.copyWith(
+                  subcategories: category.subcategories
+                      .where((item) => item.toLowerCase() != 'bicycle')
+                      .toList(),
+                ),
+              ),
       );
     if (identical(target, _expenseCategories)) {
       _normalizeMissingCategory(target);
@@ -1026,7 +1051,13 @@ class FinanceAppState extends ChangeNotifier {
     );
   }
 
-  void setBiometricLockEnabled(bool value) {
+  Future<bool> setBiometricLockEnabled(bool value) async {
+    if (value) {
+      final service = BiometricLockService.instance;
+      if (!await service.isAvailable() || !await service.authenticate()) {
+        return false;
+      }
+    }
     _biometricLockEnabled = value;
     notifyListeners();
     unawaited(
@@ -1036,6 +1067,7 @@ class FinanceAppState extends ChangeNotifier {
         }),
       ),
     );
+    return true;
   }
 
   // Loads the exchange-rate list if it has not been fetched yet, so a first-run
@@ -1339,7 +1371,7 @@ class FinanceAppState extends ChangeNotifier {
       id: 'transport',
       name: 'Transportation',
       icon: Icons.directions_bus_rounded,
-      subcategories: ['Public transport', 'Ride share', 'Taxi', 'Bicycle'],
+      subcategories: ['Public transport', 'Ride share', 'Taxi'],
     ),
     ExpenseCategory(
       id: 'vehicle',

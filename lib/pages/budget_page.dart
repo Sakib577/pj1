@@ -33,23 +33,6 @@ class BudgetPage extends StatelessWidget {
               totalSpent: totalSpent,
               progress: progress,
             ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _createBudget(context),
-                icon: const Icon(Icons.add_circle_outline),
-                label: const Text('Create New Budget'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF59E0B),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-            ),
             const SizedBox(height: 18),
             _BudgetSectionHeader(title: 'Categories', trailing: null),
             const SizedBox(height: 12),
@@ -241,6 +224,11 @@ class BudgetPage extends StatelessWidget {
       FinanceAppScope.of(context).deleteBudget(item.id);
     }
   }
+}
+
+Future<void> showCreateBudgetDialog(BuildContext context) async {
+  final page = BudgetPage(budgets: FinanceAppScope.of(context).budgets);
+  await page._createBudget(context);
 }
 
 class _BudgetEmptyState extends StatelessWidget {

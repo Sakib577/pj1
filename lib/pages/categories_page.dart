@@ -5,8 +5,6 @@ import '../state/finance_app_state.dart';
 import '../widgets/category_logo.dart';
 import 'category_detail_page.dart';
 
-enum _CategoryPageMenuAction { expense, income }
-
 class CategoriesPage extends StatefulWidget {
   const CategoriesPage({
     super.key,
@@ -34,25 +32,6 @@ class _CategoriesPageState extends State<CategoriesPage> {
       appBar: AppBar(
         title: const Text('Categories'),
         centerTitle: true,
-        actions: [
-          PopupMenuButton<_CategoryPageMenuAction>(
-            onSelected: (action) {
-              setState(() {
-                _isIncome = action == _CategoryPageMenuAction.income;
-              });
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: _CategoryPageMenuAction.expense,
-                child: Text('Expense categories'),
-              ),
-              PopupMenuItem(
-                value: _CategoryPageMenuAction.income,
-                child: Text('Income categories'),
-              ),
-            ],
-          ),
-        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _addCategory(context, state),

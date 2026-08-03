@@ -31,22 +31,6 @@ class _SavingsPageState extends State<SavingsPage> {
           children: [
             _SavingsProgressCard(overview: widget.overview),
             const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _createGoal(context),
-                icon: const Icon(Icons.add_circle_outline),
-                label: const Text('Create New Goal'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF59E0B),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-            ),
             const SizedBox(height: 18),
             Container(
               padding: const EdgeInsets.all(4),
@@ -83,53 +67,6 @@ class _SavingsPageState extends State<SavingsPage> {
   List<SavingsGoal> get _visibleGoals => widget.goals
       .where((goal) => (goal.current >= goal.target) == _showCompleted)
       .toList();
-
-  Future<void> _createGoal(BuildContext context) async {
-    final title = TextEditingController();
-    final target = TextEditingController();
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Create savings goal'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: title,
-              decoration: const InputDecoration(labelText: 'Goal name'),
-            ),
-            TextField(
-              controller: target,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(labelText: 'Target amount'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    final amount = double.tryParse(target.text.trim()) ?? 0;
-    if (saved == true &&
-        title.text.trim().isNotEmpty &&
-        amount > 0 &&
-        context.mounted) {
-      FinanceAppScope.of(context).addSavingsGoal(title.text.trim(), amount);
-    }
-    title.dispose();
-    target.dispose();
-  }
 
   Future<void> _addFunds(BuildContext context, SavingsGoal goal) async {
     final amount = TextEditingController();
@@ -285,6 +222,48 @@ class _SavingsPageState extends State<SavingsPage> {
       FinanceAppScope.of(context).deleteSavingsGoal(goal.id);
     }
   }
+}
+
+Future<void> showCreateSavingsGoalDialog(BuildContext context) async {
+  final title = TextEditingController();
+  final target = TextEditingController();
+  final saved = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Create savings goal'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: title,
+            decoration: const InputDecoration(labelText: 'Goal name'),
+          ),
+          TextField(
+            controller: target,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Target amount'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
+  await Future<void>.delayed(const Duration(milliseconds: 300));
+  final amount = double.tryParse(target.text.trim()) ?? 0;
+  if (saved == true && title.text.trim().isNotEmpty && amount > 0 && context.mounted) {
+    FinanceAppScope.of(context).addSavingsGoal(title.text.trim(), amount);
+  }
+  title.dispose();
+  target.dispose();
 }
 
 class _SavingsEmptyState extends StatelessWidget {

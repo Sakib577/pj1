@@ -7,6 +7,7 @@ import 'auth_gate.dart';
 import 'firebase_options.dart';
 import 'services/currency_preferences.dart';
 import 'state/finance_app_state.dart';
+import 'widgets/app_lock_gate.dart';
 
 // Entry point: Flutter starts running the app from here.
 Future<void> main() async {
@@ -95,7 +96,7 @@ class _MyAppState extends State<MyApp> {
             bodyMedium: TextStyle(color: Color(0xFF0F172A)),
           ),
         ),
-        home: widget.home ?? const AuthGate(),
+        home: AppLockGate(child: widget.home ?? const AuthGate()),
       ),
     );
   }

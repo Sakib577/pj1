@@ -123,6 +123,11 @@ Future<String?> showCurrencyPicker(
   return showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
+    backgroundColor: const Color(0xFFFFFCF7),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    showDragHandle: true,
     builder: (sheetContext) =>
         _CurrencyPicker(codes: codes, selectedCode: selectedCode),
   );

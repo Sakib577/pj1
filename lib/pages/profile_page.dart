@@ -14,8 +14,10 @@ class ProfilePage extends StatelessWidget {
         ? null
         : FirebaseAuth.instance.currentUser;
 
-    return SafeArea(
-      child: ListView(
+    return Scaffold(
+      appBar: AppBar(title: const Text('Profile & Settings')),
+      body: SafeArea(
+        child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         children: [
           Container(
@@ -127,6 +129,7 @@ class ProfilePage extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -199,10 +202,21 @@ class PrivacyPage extends StatelessWidget {
           const SizedBox(height: 8),
           SwitchListTile(
             value: state.biometricLockEnabled,
-            onChanged: state.setBiometricLockEnabled,
+            onChanged: (value) async {
+              final changed = await state.setBiometricLockEnabled(value);
+              if (!context.mounted || changed || !value) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Biometric authentication was cancelled or is unavailable.',
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
             title: const Text('App lock'),
             subtitle: const Text(
-              'Require device authentication to open the app.',
+              'Use your phone\'s fingerprint, face, or other biometric to unlock.',
             ),
           ),
           const ListTile(

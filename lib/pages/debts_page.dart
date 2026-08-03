@@ -17,21 +17,6 @@ class _DebtsPageState extends State<DebtsPage> {
   // 0 = Active, 1 = Closed
   int _statusIndex = 0;
 
-  Future<void> _openAddPage() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final added = await Navigator.of(
-      context,
-    ).push<bool>(MaterialPageRoute(builder: (_) => const AddDebtPage()));
-    if (added == true && mounted) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Debt added'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
   Future<void> _confirmDelete(DebtItem debt) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -67,100 +52,167 @@ class _DebtsPageState extends State<DebtsPage> {
         .where((debt) => debt.type == DebtType.borrowed)
         .toList();
     final lent = all.where((debt) => debt.type == DebtType.lent).toList();
+    final borrowedTotal = borrowed.fold<double>(
+      0,
+      (sum, debt) => sum + debt.amount,
+    );
+    final lentTotal = lent.fold<double>(0, (sum, debt) => sum + debt.amount);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Debts',
-          style: TextStyle(fontWeight: FontWeight.w800),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: _DebtTotalCard(
+                  label: _statusIndex == 0
+                      ? 'Total borrowed'
+                      : 'Closed borrowed',
+                  amount: borrowedTotal,
+                  icon: Icons.arrow_downward_rounded,
+                  color: const Color(0xFFDC2626),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DebtTotalCard(
+                  label: _statusIndex == 0 ? 'Total lent' : 'Closed lent',
+                  amount: lentTotal,
+                  icon: Icons.arrow_upward_rounded,
+                  color: const Color(0xFF16A34A),
+                ),
+              ),
+            ],
+          ),
         ),
-        centerTitle: true,
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddPage,
-        backgroundColor: const Color(0xFFF59E0B),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Debt'),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF2F7),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _SegmentButton(
-                      label: 'Active',
-                      selected: _statusIndex == 0,
-                      onTap: () => setState(() => _statusIndex = 0),
-                    ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF2F7),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _SegmentButton(
+                    label: 'Active',
+                    selected: _statusIndex == 0,
+                    onTap: () => setState(() => _statusIndex = 0),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _SegmentButton(
-                      label: 'Closed',
-                      selected: _statusIndex == 1,
-                      onTap: () => setState(() => _statusIndex = 1),
-                    ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _SegmentButton(
+                    label: 'Closed',
+                    selected: _statusIndex == 1,
+                    onTap: () => setState(() => _statusIndex = 1),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-          Expanded(
-            child: all.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                    child: EmptyStateCard(
-                      title: _statusIndex == 0
-                          ? 'No active debts'
-                          : 'No closed debts',
-                      subtitle: _statusIndex == 0
-                          ? 'Add money you borrowed or lent to track it here.'
-                          : 'Close, forgive, or repay an active debt to move it here.',
-                      icon: _statusIndex == 0
-                          ? Icons.handshake_outlined
-                          : Icons.task_alt,
-                    ),
-                  )
-                : ListView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
-                    children: [
-                      _SectionLabel(title: 'Borrowed'),
-                      const SizedBox(height: 8),
-                      if (borrowed.isEmpty)
-                        const _EmptySubsection(label: 'No borrowed debts here')
-                      else
-                        for (final debt in borrowed) ...[
-                          _DebtCard(
-                            debt: debt,
-                            onDelete: () => _confirmDelete(debt),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                      const SizedBox(height: 8),
-                      _SectionLabel(title: 'Lent'),
-                      const SizedBox(height: 8),
-                      if (lent.isEmpty)
-                        const _EmptySubsection(label: 'No lent debts here')
-                      else
-                        for (final debt in lent) ...[
-                          _DebtCard(
-                            debt: debt,
-                            onDelete: () => _confirmDelete(debt),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                    ],
+        ),
+        Expanded(
+          child: all.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: EmptyStateCard(
+                    title: _statusIndex == 0
+                        ? 'No active debts'
+                        : 'No closed debts',
+                    subtitle: _statusIndex == 0
+                        ? 'Add money you borrowed or lent to track it here.'
+                        : 'Close, forgive, or repay an active debt to move it here.',
+                    icon: _statusIndex == 0
+                        ? Icons.handshake_outlined
+                        : Icons.task_alt,
                   ),
+                )
+              : ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
+                  children: [
+                    _SectionLabel(title: 'Borrowed'),
+                    const SizedBox(height: 8),
+                    if (borrowed.isEmpty)
+                      const _EmptySubsection(label: 'No borrowed debts here')
+                    else
+                      for (final debt in borrowed) ...[
+                        _DebtCard(
+                          debt: debt,
+                          onDelete: () => _confirmDelete(debt),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    const SizedBox(height: 8),
+                    _SectionLabel(title: 'Lent'),
+                    const SizedBox(height: 8),
+                    if (lent.isEmpty)
+                      const _EmptySubsection(label: 'No lent debts here')
+                    else
+                      for (final debt in lent) ...[
+                        _DebtCard(
+                          debt: debt,
+                          onDelete: () => _confirmDelete(debt),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DebtTotalCard extends StatelessWidget {
+  const _DebtTotalCard({
+    required this.label,
+    required this.amount,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final double amount;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              formatCurrency(amount),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),

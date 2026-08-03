@@ -19,6 +19,7 @@ import 'package:pj1/state/finance_app_state.dart';
 import 'package:pj1/utils/currency_formatters.dart';
 import 'package:pj1/widgets/empty_state_card.dart';
 import 'package:pj1/widgets/data_loading_view.dart';
+import 'package:pj1/widgets/app_lock_gate.dart';
 import 'package:pj1/widgets/planned_payment_card.dart';
 import 'package:pj1/widgets/transaction_actions.dart';
 import 'package:pj1/widgets/transaction_tile.dart';
@@ -51,6 +52,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _initUserData() async {
     await _appState.syncUserData();
+    if (!mounted) return;
+    while (mounted && !context.appLockUnlocked) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
     if (!mounted) return;
     await _promptDefaultCurrencyIfNeeded();
     await _checkDuePayments();
@@ -94,7 +99,15 @@ class _DashboardPageState extends State<DashboardPage> {
     final action = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Payments due'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: const Color(0xFFFFFCF7),
+        title: const Row(
+          children: [
+            Icon(Icons.event_available_rounded, color: Color(0xFFF59E0B)),
+            SizedBox(width: 10),
+            Text('Payments due'),
+          ],
+        ),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView.separated(
@@ -216,9 +229,22 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _openDebts() {
-    Navigator.of(
+    _onNavTap(3);
+  }
+
+  Future<void> _openAddDebtPage() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final added = await Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => const DebtsPage()));
+    ).push<bool>(MaterialPageRoute(builder: (_) => const AddDebtPage()));
+    if (added == true && mounted) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Debt added'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _openShoppingList() {
@@ -246,6 +272,55 @@ class _DashboardPageState extends State<DashboardPage> {
     final stats = appState.stats;
     final transactions = appState.transactions;
     final isHome = _navIndex == 0;
+    Widget? actionFab;
+    if (isHome) {
+      actionFab = FloatingActionButton(
+        key: const ValueKey('home-fab'),
+        onPressed: () async {
+          final messenger = ScaffoldMessenger.of(context);
+          final saved = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(builder: (_) => const AddTransactionPage()),
+          );
+          if (saved == true && mounted) {
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text('Transaction saved'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
+        backgroundColor: const Color(0xFFF59E0B),
+        child: const Icon(Icons.add, color: Colors.white),
+      );
+    } else if (_navIndex == 1) {
+      actionFab = FloatingActionButton.extended(
+        key: const ValueKey('budget-fab'),
+        onPressed: () => showCreateBudgetDialog(context),
+        backgroundColor: const Color(0xFFF59E0B),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('New budget'),
+      );
+    } else if (_navIndex == 2) {
+      actionFab = FloatingActionButton.extended(
+        key: const ValueKey('savings-fab'),
+        onPressed: () => showCreateSavingsGoalDialog(context),
+        backgroundColor: const Color(0xFFF59E0B),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('New goal'),
+      );
+    } else if (_navIndex == 3) {
+      actionFab = FloatingActionButton.extended(
+        key: const ValueKey('debt-fab'),
+        onPressed: _openAddDebtPage,
+        backgroundColor: const Color(0xFFF59E0B),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Debt'),
+      );
+    }
 
     return Scaffold(
       key: _scaffoldKey,
@@ -265,7 +340,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ? 'Budget'
                     : _navIndex == 2
                     ? 'Savings'
-                    : 'Profile & Settings',
+                    : 'Debts',
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
@@ -298,21 +373,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 ],
               ),
-        actions: _navIndex == 1 || _navIndex == 2
-            ? [
-                IconButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('More options tapped'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.more_vert),
-                ),
-              ]
-            : null,
+        actions: null,
       ),
       body: Column(
         children: [
@@ -412,33 +473,25 @@ class _DashboardPageState extends State<DashboardPage> {
                   overview: appState.savingsOverview,
                   goals: appState.savingsGoals,
                 ),
-                const ProfilePage(),
+                const DebtsPage(),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: isHome
-          ? FloatingActionButton(
-              onPressed: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                final saved = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute(builder: (_) => const AddTransactionPage()),
-                );
-                if (saved == true && mounted) {
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('Transaction saved'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              },
-              backgroundColor: const Color(0xFFF59E0B),
-              child: const Icon(Icons.add, color: Colors.white),
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(scale: animation, child: child),
+        ),
+        child: actionFab ?? const SizedBox.shrink(key: ValueKey('no-fab')),
+      ),
+      floatingActionButtonLocation: isHome
+          ? FloatingActionButtonLocation.centerDocked
+          : FloatingActionButtonLocation.endFloat,
       drawer: _AppDrawer(
         selectedIndex: _navIndex,
         onNavigate: (index) {
@@ -460,6 +513,13 @@ class _DashboardPageState extends State<DashboardPage> {
         onOpenTool: (tool) {
           _openFromDrawer(() => _openTool(tool));
         },
+        onOpenProfile: () {
+          _openFromDrawer(() {
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const ProfilePage()));
+          });
+        },
       ),
       bottomNavigationBar: _BottomNavBar(
         currentIndex: _navIndex,
@@ -479,6 +539,7 @@ class _AppDrawer extends StatelessWidget {
     required this.onOpenDebts,
     required this.onOpenShoppingList,
     required this.onOpenTool,
+    required this.onOpenProfile,
   });
 
   final int selectedIndex;
@@ -488,6 +549,7 @@ class _AppDrawer extends StatelessWidget {
   final VoidCallback onOpenDebts;
   final VoidCallback onOpenShoppingList;
   final ValueChanged<FinanceTool> onOpenTool;
+  final VoidCallback onOpenProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -500,60 +562,63 @@ class _AppDrawer extends StatelessWidget {
       child: SafeArea(
         child: ListView(
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-              decoration: const BoxDecoration(color: Color(0xFFF59E0B)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const CircleAvatar(
-                    radius: 26,
-                    backgroundColor: Colors.white24,
-                    child: Icon(
-                      Icons.person_outline,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Expense Tracker',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    email,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Row(
-                    children: [
-                      Icon(
-                        Icons.verified_rounded,
-                        size: 16,
+            InkWell(
+              onTap: onOpenProfile,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+                decoration: const BoxDecoration(color: Color(0xFFF59E0B)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const CircleAvatar(
+                      radius: 26,
+                      backgroundColor: Colors.white24,
+                      child: Icon(
+                        Icons.person_outline,
                         color: Colors.white,
+                        size: 30,
                       ),
-                      SizedBox(width: 6),
-                      Text(
-                        'Verified account',
-                        style: TextStyle(
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Expense Tracker',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Row(
+                      children: [
+                        Icon(
+                          Icons.verified_rounded,
+                          size: 16,
                           color: Colors.white,
-                          fontWeight: FontWeight.w700,
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        SizedBox(width: 6),
+                        Text(
+                          'Verified account',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -600,12 +665,6 @@ class _AppDrawer extends StatelessWidget {
               onTap: () => onNavigate(2),
             ),
             _DrawerNavigationItem(
-              icon: Icons.person_outline,
-              label: 'Profile & Settings',
-              selected: selectedIndex == 3,
-              onTap: () => onNavigate(3),
-            ),
-            _DrawerNavigationItem(
               icon: Icons.swap_horiz_rounded,
               label: 'Currency Converter',
               selected: false,
@@ -616,6 +675,12 @@ class _AppDrawer extends StatelessWidget {
               label: 'Export Report',
               selected: false,
               onTap: () => onOpenTool(FinanceTool.report),
+            ),
+            _DrawerNavigationItem(
+              icon: Icons.person_outline,
+              label: 'Profile & Settings',
+              selected: false,
+              onTap: onOpenProfile,
             ),
             const Divider(height: 32),
             const ListTile(
@@ -900,8 +965,8 @@ class _BottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BottomAppBar(
-      shape: const CircularNotchedRectangle(),
-      notchMargin: 8,
+      shape: showFab ? const CircularNotchedRectangle() : null,
+      notchMargin: showFab ? 8 : 0,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -936,8 +1001,8 @@ class _BottomNavBar extends StatelessWidget {
           ),
           Expanded(
             child: _NavBarItem(
-              icon: Icons.person,
-              label: 'Profile',
+              icon: Icons.handshake_outlined,
+              label: 'Debts',
               isSelected: currentIndex == 3,
               onTap: () => onTap(3),
             ),

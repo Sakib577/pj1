@@ -62,7 +62,17 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _initUserData() async {
-    await _appState.syncUserData();
+    try {
+      await _appState.syncUserData().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          // Timeout: proceed with an empty state instead of a white screen.
+          debugPrint('syncUserData timed out after 15s — showing dashboard anyway');
+        },
+      );
+    } catch (_) {
+      // Silently proceed on any error so the dashboard always renders.
+    }
     if (!mounted) return;
     // Wait for the current frame to finish so AppLockGate has established this
     // session's unlock future before we read it. Without this, the await below
@@ -575,12 +585,15 @@ class _DashboardPageState extends State<DashboardPage> {
         showFab: isHome,
       ),
         ),
-        IgnorePointer(
-          ignoring: _drawerOpen,
-          child: AnimatedOpacity(
-            opacity: _drawerOpen ? 0 : 1,
-            duration: const Duration(milliseconds: 180),
-            child: Positioned.fill(
+        // Positioned MUST be a direct child of Stack — wrapping it inside
+        // IgnorePointer or AnimatedOpacity causes a ParentData type-error at
+        // runtime in release mode.
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: _drawerOpen,
+            child: AnimatedOpacity(
+              opacity: _drawerOpen ? 0 : 1,
+              duration: const Duration(milliseconds: 180),
               child: TweenAnimationBuilder<_FabPosition>(
                 tween: _FabPositionTween(end: targetFabPos),
                 duration: const Duration(milliseconds: 320),

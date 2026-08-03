@@ -109,8 +109,6 @@ class FinanceAppState extends ChangeNotifier {
   List<ExpenseCategory> get recentIncomeCategories =>
       _recentCategories(_incomeCategories, _recentIncomeCategoryIds);
 
-  Future<void>? _initialLoad;
-
   List<ExpenseCategory> _recentCategories(
     List<ExpenseCategory> categories,
     List<String> recentIds,
@@ -479,9 +477,14 @@ class FinanceAppState extends ChangeNotifier {
       return date.year == now.year && date.month == now.month;
     }
     final days = budget.period == 'thirtyDays' ? 30 : budget.customDays;
+    // Guard against legacy/corrupted records: a non-positive interval would
+    // never advance the loop below and freeze the whole app (white screen).
+    if (days < 1) return false;
     var start = budget.startDate;
-    while (start.add(Duration(days: days)).isBefore(now)) {
+    var guard = 0;
+    while (start.add(Duration(days: days)).isBefore(now) && guard < 2000) {
       start = start.add(Duration(days: days));
+      guard++;
     }
     return !date.isBefore(start) &&
         date.isBefore(start.add(Duration(days: days)));
@@ -493,6 +496,7 @@ class FinanceAppState extends ChangeNotifier {
     String period = 'monthly',
     int customDays = 30,
   }) {
+    if (customDays < 1) customDays = 1;
     final item = BudgetCategory(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       label: label,
@@ -642,11 +646,27 @@ class FinanceAppState extends ChangeNotifier {
     _usdRates = Map.of(CurrencySettings.usdRates);
 
     try {
-      _initialLoad = _loadUserDataForUser(user.uid);
-      await _initialLoad;
+      final load = _loadUserDataForUser(user.uid);
+      // Watchdog: regardless of how the load completes, force the dashboard to
+      // render after a hard cap so the user is never left on a blank screen.
+      Future<void>.delayed(const Duration(seconds: 12)).then((_) {
+        if (_isLoadingData) {
+          _isLoadingData = false;
+          notifyListeners();
+          debugPrint('syncUserData: watchdog forced isLoadingData=false');
+        }
+      });
+      await load.timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      // The initial load did not finish in time (slow or unavailable network).
+      // Keep whatever already loaded so the dashboard renders instead of
+      // showing a never-ending white loader. The pending future keeps running
+      // and updates the UI when it eventually completes.
+      debugPrint('syncUserData: initial load timed out after 10s');
     } finally {
       _isLoadingData = false;
       notifyListeners();
+      debugPrint('syncUserData: finished, isLoadingData=false');
     }
   }
 
@@ -676,7 +696,6 @@ class FinanceAppState extends ChangeNotifier {
     _budgetSubscription = null;
     _goalSubscription = null;
     _notificationSubscription = null;
-    _initialLoad = null;
     _categorySyncReady = false;
   }
 
@@ -750,7 +769,15 @@ class FinanceAppState extends ChangeNotifier {
     } catch (_) {}
 
     try {
-      final storedCurrency = await currencyFuture;
+      // Server-first on purpose (restores the stored currency after a
+      // reinstall), but bound it: on a slow/unreachable network this read can
+      // hang for a very long time and would otherwise keep the dashboard on
+      // its white loading screen. The catch below falls back to the cached
+      // choice when the timeout fires.
+      final storedCurrency = await currencyFuture.timeout(
+        const Duration(seconds: 6),
+      );
+      debugPrint('loadCurrency: ok, code=$storedCurrency');
       if (storedCurrency != null && storedCurrency.isNotEmpty) {
         CurrencySettings.update(code: storedCurrency, rates: _usdRates);
         _currencyNeedsSetup = false;
@@ -763,10 +790,13 @@ class FinanceAppState extends ChangeNotifier {
       }
     } catch (_) {
       // Offline: keep the current currency and do not prompt.
+      debugPrint('loadCurrency: timed out / failed (offline or unreachable)');
     }
 
     try {
-      final preferences = await preferencesFuture;
+      final preferences = await preferencesFuture.timeout(
+        const Duration(seconds: 6),
+      );
       _paymentNotificationsEnabled =
           preferences['paymentNotificationsEnabled'] as bool? ?? true;
       _budgetNotificationsEnabled =

@@ -128,7 +128,7 @@ class BudgetPage extends StatelessWidget {
         name.text.trim(),
         amount,
         period: period,
-        customDays: int.tryParse(customDays.text) ?? 30,
+        customDays: (int.tryParse(customDays.text) ?? 30).clamp(1, 36500),
       );
     }
     name.dispose();

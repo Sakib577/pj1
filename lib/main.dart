@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -9,17 +12,54 @@ import 'services/currency_preferences.dart';
 import 'state/finance_app_state.dart';
 import 'widgets/app_lock_gate.dart';
 
+// Global error handler flags — keep at top level so they survive hot restart.
+String? _lastError;
+FlutterErrorDetails? _lastErrorDetails;
+
+/// Catches **all** unhandled errors (sync + async) and renders a red error
+/// screen instead of a white/frozen screen in release builds.
+void _setupGlobalErrorHandlers() {
+  // ---------- Flutter framework errors (e.g. overflow, null widget) ----------
+  final originalOnError = FlutterError.onError;
+  FlutterError.onError = (FlutterErrorDetails details) {
+    // In release mode, show a visible screen AND still call the original
+    // handler so the error still reaches the console / platform dispatcher.
+    _lastErrorDetails = details;
+    _lastError = details.exceptionAsString();
+    originalOnError?.call(details);
+  };
+
+  // ---------- Dart unhandled async errors (e.g. futures without catch) ----------
+  runZonedGuarded<Future<void>>(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      // -- Firestore offline persistence MUST be configured BEFORE any other
+      //    Firestore access. If any Firestore call happens first (e.g. inside a
+      //    StatefulWidget field initializer), the default settings lock in and
+      //    this call throws because settings can only be set once. In release
+      //    builds this can silently fail and leave the app with no local cache,
+      //    producing a white screen on first launch after login.
+      await _enableOfflinePersistence();
+      // Restore the display currency and its last known rates before any UI is
+      // built, so an offline launch never renders a selected sign with USD values.
+      await CurrencyPreferences.hydrate();
+      runApp(const MyApp());
+    },
+    (Object error, StackTrace stack) {
+      _lastError = '$error\n\n$stack';
+      _lastErrorDetails = null;
+      // Re-run the app with the error visible (the root widget checks for this).
+      runApp(const MyApp());
+    },
+  );
+}
+
 // Entry point: Flutter starts running the app from here.
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // Restore the display currency and its last known rates before any UI is
-  // built, so an offline launch never renders a selected sign with USD values.
-  await CurrencyPreferences.hydrate();
-  // Enable Firestore offline persistence so the app keeps working (reads and
-  // locally-buffered writes) while disconnected, then syncs on reconnect.
-  await _enableOfflinePersistence();
-  runApp(const MyApp());
+  _setupGlobalErrorHandlers();
 }
 
 // Best-effort: if the platform does not support durable local storage (e.g.
@@ -32,6 +72,85 @@ Future<void> _enableOfflinePersistence() async {
     );
   } catch (_) {
     // Ignore: offline support is an enhancement, not a hard requirement.
+  }
+}
+
+/// Shows a visible red error screen when a crash has been captured, instead
+/// of a white/frozen screen. Tapping "Reload" restarts the app.
+class _ErrorScreen extends StatelessWidget {
+  const _ErrorScreen({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: const Color(0xFFFFF5F5),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 48),
+                const Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: Color(0xFFDC2626),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Something went wrong',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFFDC2626),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'The app encountered an error. Details are shown below.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF6B7280)),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFECACA)),
+                  ),
+                  child: SelectableText(
+                    message.length > 2000
+                        ? '${message.substring(0, 2000)}...\n\n(truncated)'
+                        : message,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      color: Color(0xFF991B1B),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () {
+                    _lastError = null;
+                    _lastErrorDetails = null;
+                    main();
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reload'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -76,6 +195,11 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    // If a crash was captured, show the error screen instead of a white page.
+    final message = _lastError;
+    if (message != null) {
+      return _ErrorScreen(message: message);
+    }
     const seed = Color(0xFFF59E0B);
     return FinanceAppScope(
       state: _appState,

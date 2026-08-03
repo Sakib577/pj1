@@ -883,7 +883,9 @@ class PlannedPayment {
         (repeat) => repeat.name == data['repeat'],
         orElse: () => RepeatFrequency.once,
       ),
-      customEveryDays: (data['customEveryDays'] as num?)?.toInt() ?? 7,
+      customEveryDays: ((data['customEveryDays'] as num?)?.toInt() ?? 7)
+          .clamp(1, 36500)
+          .toInt(),
       startDate: DateTime.fromMillisecondsSinceEpoch(
         (data['startDate'] as num?)?.toInt() ?? 0,
       ),
@@ -914,8 +916,12 @@ class PlannedPayment {
       }
     }
     if (repeat == RepeatFrequency.once) return date;
-    while (date.isBefore(target)) {
+    // Bound the loop: a non-positive custom interval would otherwise spin
+    // forever and freeze the UI (white screen) on corrupt data.
+    var guard = 0;
+    while (date.isBefore(target) && guard < 10000) {
       date = _advance(date);
+      guard++;
     }
     return date;
   }
@@ -953,7 +959,9 @@ class PlannedPayment {
           date.day,
         );
       case RepeatFrequency.custom:
-        return date.add(Duration(days: customEveryDays));
+        return date.add(
+          Duration(days: customEveryDays < 1 ? 1 : customEveryDays),
+        );
       case RepeatFrequency.once:
         return date;
     }
@@ -1038,7 +1046,9 @@ class BudgetCategory {
           (data['startDate'] as num?)?.toInt() ??
               DateTime.now().millisecondsSinceEpoch,
         ),
-        customDays: (data['customDays'] as num?)?.toInt() ?? 30,
+        customDays: ((data['customDays'] as num?)?.toInt() ?? 30)
+            .clamp(1, 36500)
+            .toInt(),
       );
 }
 

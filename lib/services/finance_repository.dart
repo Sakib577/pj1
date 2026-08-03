@@ -37,12 +37,49 @@ class FinanceRepository {
         .toList();
   }
 
+  Future<List<TransactionItem>> loadRecentTransactions(
+    String uid, {
+    int limit = 100,
+    Source source = Source.cache,
+  }) async {
+    final snapshot = await _collection(uid, 'transactions')
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .get(GetOptions(source: source));
+    return snapshot.docs
+        .map((doc) => TransactionItem.fromMap(doc.id, doc.data()))
+        .toList();
+  }
+
+  Future<List<TransactionItem>> loadAllTransactionsFromServer(String uid) async {
+    final snapshot = await _collection(uid, 'transactions')
+        .get(const GetOptions(source: Source.server));
+    return snapshot.docs
+        .map((doc) => TransactionItem.fromMap(doc.id, doc.data()))
+        .toList();
+  }
+
   Stream<List<TransactionItem>> watchTransactions(String uid) {
     return _collection(uid, 'transactions').snapshots().map(
       (snapshot) => snapshot.docs
           .map((doc) => TransactionItem.fromMap(doc.id, doc.data()))
           .toList(),
     );
+  }
+
+  Stream<List<TransactionItem>> watchRecentTransactions(
+    String uid, {
+    int limit = 100,
+  }) {
+    return _collection(uid, 'transactions')
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => TransactionItem.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
   }
 
   // Reports whether the user's transactions collection is fully synced, being
@@ -58,6 +95,18 @@ class FinanceRepository {
       if (snapshot.metadata.hasPendingWrites) return SyncStatus.pending;
       return SyncStatus.synced;
     });
+  }
+
+  Stream<SyncStatus> watchRecentSyncStatus(String uid) {
+    return _collection(uid, 'transactions')
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots(includeMetadataChanges: true)
+        .map((snapshot) {
+          if (snapshot.metadata.isFromCache) return SyncStatus.offline;
+          if (snapshot.metadata.hasPendingWrites) return SyncStatus.pending;
+          return SyncStatus.synced;
+        });
   }
 
   Future<void> saveTransaction(String uid, TransactionItem transaction) async {

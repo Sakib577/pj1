@@ -27,6 +27,10 @@ Recent implementation notes (August 2026)
   dialogs, preventing disposed-controller and cascading framework errors.
 - Category cards clip rounded press feedback and remove ExpansionTile divider
   artifacts. Other Income uses a gift-card icon instead of the generic category icon.
+- Transaction history starts with the newest 100 records and reveals older records
+  in 100-item batches. It supports text search, category filtering, and date-range
+  filtering. Firestore's live transaction listener is limited to the newest 100;
+  the full history is hydrated separately to preserve accurate totals and budgets.
 
 Technology
 ----------

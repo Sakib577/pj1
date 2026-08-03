@@ -660,7 +660,7 @@ class FinanceAppState extends ChangeNotifier {
   Future<void> _loadUserDataForUser(String uid) async {
     // Start independent cache/server reads together. Firestore can satisfy
     // these from its local cache immediately while any network refresh runs.
-    final transactionsFuture = _financeRepository.loadTransactions(uid);
+    final transactionsFuture = _financeRepository.loadRecentTransactions(uid);
     final paymentsFuture = _financeRepository.loadPlannedPayments(uid);
     final debtsFuture = _financeRepository.loadDebts(uid);
     final shoppingFuture = _financeRepository.loadShoppingItems(uid);
@@ -756,25 +756,23 @@ class FinanceAppState extends ChangeNotifier {
     _syncReminders();
     notifyListeners();
 
-    _transactionSubscription = _financeRepository.watchTransactions(uid).listen(
+    _transactionSubscription = _financeRepository
+        .watchRecentTransactions(uid)
+        .listen(
       (transactions) {
-        _transactions
-          ..clear()
-          ..addAll(transactions)
-          ..sort(
-            (a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
-          );
+        _mergeRecentTransactions(transactions);
         _recomputeTotals();
         notifyListeners();
       },
     );
-    _syncStatusSubscription = _financeRepository.watchSyncStatus(uid).listen((
+    _syncStatusSubscription = _financeRepository.watchRecentSyncStatus(uid).listen((
       status,
     ) {
       if (status == _syncStatus) return;
       _syncStatus = status;
       notifyListeners();
     });
+    unawaited(_hydrateAllTransactions(uid));
     _paymentSubscription = _financeRepository.watchPlannedPayments(uid).listen((
       payments,
     ) {
@@ -827,6 +825,38 @@ class FinanceAppState extends ChangeNotifier {
             ..addAll(items);
           notifyListeners();
         });
+  }
+
+  void _mergeRecentTransactions(List<TransactionItem> recent) {
+    final recentIds = _transactions
+        .take(100)
+        .map((item) => item.id)
+        .whereType<String>()
+        .toSet();
+    _transactions.removeWhere(
+      (item) => item.id != null && recentIds.contains(item.id),
+    );
+    _transactions.addAll(recent);
+    _transactions.sort(
+      (a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
+    );
+  }
+
+  Future<void> _hydrateAllTransactions(String uid) async {
+    try {
+      final all = await _financeRepository.loadAllTransactionsFromServer(uid);
+      if (_syncedUid != uid) return;
+      _transactions
+        ..clear()
+        ..addAll(all)
+        ..sort(
+          (a, b) => _sortTime(b.createdAt).compareTo(_sortTime(a.createdAt)),
+        );
+      _recomputeTotals();
+      notifyListeners();
+    } catch (_) {
+      // The recent cache remains available when the server is unreachable.
+    }
   }
 
   // Balance is derived from transactions. Debt activity creates matching

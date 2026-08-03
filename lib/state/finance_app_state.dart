@@ -783,6 +783,15 @@ class FinanceAppState extends ChangeNotifier {
             ? LockType.biometric
             : LockType.none;
       }
+      // The PIN hash lives only on this device, keyed by user. If the stored
+      // preference says PIN but no hash exists locally (e.g. after a fresh
+      // install, or on an account that never set one on this phone), there is
+      // nothing to verify against — drop the lock so the app opens and the
+      // user can set a new PIN from Settings.
+      if (_lockType == LockType.pin &&
+          !await AppLockService.instance.hasPin(uid)) {
+        _lockType = LockType.none;
+      }
     } catch (_) {}
 
     _recomputeTotals();

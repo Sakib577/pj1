@@ -1,0 +1,327 @@
+================================================================================
+EXPENSE TRACKER — STATISTICS MODULE IMPLEMENTATION PLAN
+================================================================================
+
+Goal: Build a self-contained, reusable Statistics module (engine + analytics
+service + chart widgets + stat cards) that can be dropped into a Statistics
+screen. No redesign of the existing app. Statistics will be reachable from a
+new entry in the dashboard side menu (drawer).
+
+This file is a phased plan only — no code is implemented yet. Work will be split
+into small one-at-a-time tasks; each task is implemented and verified (analyze +
+tests) before the next begins.
+
+--------------------------------------------------------------------------------
+1. EXISTING ARCHITECTURE (what we build on)
+--------------------------------------------------------------------------------
+- State management: `FinanceAppState extends ChangeNotifier`, exposed via the
+  `FinanceAppScope` InheritedWidget (lib/state/finance_app_state.dart).
+  `main.dart` rebuilds the scope whenever the notifier fires (revision counter).
+  => Follow this existing pattern. (User asked: "Riverpod — use whatever state
+     management already exists if different". No new provider package needed.)
+- Repository: `FinanceRepository` (lib/services/finance_repository.dart).
+  Provides load/watch for transactions, planned payments, debts, shopping items,
+  budgets, savings goals, notifications.
+- Models: lib/models/finance_models.dart
+  - TransactionItem{ id, title, subtitle, amount, icon, iconColor,
+                     categoryName, note, negative, createdAt }
+    - amount is USD internally; negative == expense.
+    - `state.transactions` exposes the FULL hydrated in-memory transaction list.
+  - BudgetCategory, SavingsGoal, DebtItem, ExpenseCategory also available.
+- Currency: utils/currency_settings.dart + utils/currency_formatters.dart
+  (formatCurrency, CurrencySettings.toUsd / .fromUsd / .symbol / .code).
+  => ALL money shown through formatCurrency; all dates via createdAt.
+- Theme: Material 3, ColorScheme.fromSeed(seed 0xFFF59E0B), scaffold bg 0xFFF7F5EF.
+  No dark mode yet. Statistics module adds dark/light support.
+- Entry point: Dashboard AppBar has a `menu` icon that opens `_AppDrawer`
+  (lib/pages/dashboard_page.dart). A "Statistics" item will be added there.
+
+--------------------------------------------------------------------------------
+2. NEW DEPENDENCIES (pubspec.yaml)
+--------------------------------------------------------------------------------
+- fl_chart (^0.69.x)          -> charts (line, bar, pie, scatter).
+- intl (^0.19.x / ^0.20.x)    -> date formatting + calendar/weekday labels.
+  (Use the version that resolves cleanly with the existing SDK.)
+Wrap all fl_chart usage behind our own chart widget wrappers so the library can
+be swapped later without touching business logic.
+
+================================================================================
+3. PROJECT STRUCTURE (NEW FILES ONLY, inside existing lib/)
+================================================================================
+Guide: lib/ page files are already folders; keep statistics separated.
+
+lib/
+  analytics/                        <- analytics engine + widgets (grouped)
+    models/
+      stat_models.dart              <- date range, series, points, summary DTOs
+      analytics_models.dart         <- DTOs per statistic (balance trend, ratios…)
+    services/
+      analytics_service.dart        <- pure computation engine (NO UI, cached)
+    repositories/
+      analytics_repository.dart     <- reads raw data from FinanceRepository/state
+    providers/
+      statistics_controller.dart    <- ChangeNotifier: pick range, exposes data
+      date_range_controller.dart    <- the active DateRange + presets
+    selectors/
+      stat_selectors.dart           <- memoized derived lookups on a dataset
+    utils/
+      stat_math.dart                 <- aggregation helpers (no UI)
+      date_ranges.dart               <- range windowing + period bucketing
+    charts/
+      stat_line_chart.dart           <- line + area chart wrapper (fl_chart)
+      stat_bar_chart.dart            <- grouped/stacked bars wrapper
+      stat_donut_chart.dart          <- donut/pie wrapper + center label
+      stat_heatmap.dart              <- github-style calendar grid
+      stat_calendar.dart             <- monthly calendar view
+      stat_circular_gauge.dart       <- budget / DTI circular progress
+      chart_tooltip.dart             <- shared tooltip widget
+      chart_theme.dart               <- colors depend on AMBIENT ThemeMode
+    widgets/
+      stat_card.dart                 <- generic statistic card
+      stat_summary_row.dart          <- income/expense/net mini summary
+      stat_loading_view.dart         <- skeleton / spinner
+      stat_empty_view.dart           <- empty state
+      stat_error_view.dart           <- error state + retry
+      range_segmented_control.dart   <- Trend/Cumulative switch
+      balance_trend_card.dart
+      cash_flow_summary_card.dart
+      cash_flow_trend_card.dart
+      category_donut_card.dart
+      spending_trend_card.dart
+      top_expenses_card.dart
+      debt_ratio_card.dart
+      income_expense_comparison_card.dart
+      monthly_overview_card.dart
+      financial_health_card.dart
+      category_analytics_card.dart
+      income_analytics_card.dart
+      spending_heatmap_card.dart
+      calendar_view_card.dart
+      weekly_pattern_card.dart
+      hourly_pattern_card.dart
+      budget_progress_card.dart
+      savings_trend_card.dart
+      cash_flow_forecast_card.dart
+      balance_history_card.dart
+
+lib/pages/
+  statistics_page.dart            <- screen that places the cards (composable)
+
+Each file stays ~250 lines or fewer. Widgets are mostly leaf widgets receiving
+computed data (keeps them UI-only and reusable anywhere).
+
+--------------------------------------------------------------------------------
+4. DATA / MODELS
+--------------------------------------------------------------------------------
+DateRange: detected presets
+  {today, yesterday, last7, last30, thisMonth, lastMonth, thisYear, custom}
+  Fields: start(DateTime), end(DateTime), and a label + a previous-period window
+  (same length immediately before `start`) so all "vs previous period" compare.
+
+Compute previous period automatically:
+  previous = DateTimeRange(start - (end-start), start).
+
+Core computed models (pure, theme-independent):
+  PeriodWindow { range, previousRange }
+  SeriesPoint { DateTime x; double y; }
+  TrendSeries { List<SeriesPoint> points; double deltaPercent; double current; double previous; }
+  GroupedBar { label; double income; double expense; double net; }
+  CategoryStat { id, name, icon, color; amount; percent; avg; max; min; count; perDay; monthlyAvg; }
+  TopExpense { TransactionItem txn; }
+  GaugeResult { double value; double ratio; String label; _HealthLevel }
+  ForecastPoint { DateTime x; double value; bool forecast; }
+
+All money kept as double (USD) internally, converted only for display.
+
+--------------------------------------------------------------------------------
+5. DATA LAYER
+--------------------------------------------------------------------------------
+5.1 Repo integration
+  analytics_repository.dart reads:
+    - transactions        -> FinanceAppScope/FinanceAppState.transactions
+    - budgets            -> FinanceAppState.budgets
+    - savings goals      -> FinanceAppState.savingsGoals
+    - debts              -> FinanceAppState.debts
+  No new Firestore reads — reuse the already-synced in-memory state (offline
+  proof, single source of truth, no extra loading).
+
+5.2 Analytics service (analytics_service.dart) — pure, NO UI trigger:
+    calculateBalance(rows, window)
+    calculateCashFlow(rows, window)
+    calculateCategorySpending(rows, range)
+    calculateMonthlyTrend(rows, range, granularity)
+    calculateDebtRatio(debts, income)
+    calculateSavingsRate(income, expense)
+    calculateTopExpenses(rows, n=5, week=?)
+    calculateIncomeExpenseComparison(rows, range, granularity)
+    calculateFinancialHealth(rows, range)
+    calculateCategoryAnalytics(rows, range)
+    calculateIncomeAnalytics(rows, range)
+    calculateLongestStreak / daily-balance series / forecasts / heatmap cells.
+
+5.3 Memoization / selectors
+  - FinanceAppState already only notifies when the underlying list changes; the
+    statistics page wraps its work in an AnalyticsController (ChangeNotifier).
+  - The controller holds a per-(raw data identity,dateRange) cache keyed by a
+    cheap hash of (transactions.length, lastCreatedAtUs, range.code) so re-builds
+    only recompute when the data OR the selected range actually changed.
+  - selectors.dart exposes stable lookups so dependent widgets rebuild narrowly.
+
+6. PROVIDERS / CONTROLLER
+  analytics_controller.dart: ChangeNotifier
+    - exposes current `DateRange` + `CustomRange`.
+    - exposes lazily-computed cached StatisticsBundle for the active range.
+    - attaches weakly to FinanceAppState; can live in a FiniteStateScope above
+      the statistics route (no app-wide provider package needed).
+  DateRange picker widget reuses the same presets; changing it calls
+  controller.selectRange(...) -> notifyListeners() -> charts rebuild (animated).
+
+--------------------------------------------------------------------------------
+6. UI / REUSABLE WIDGETS + CHARTS
+--------------------------------------------------------------------------------
+Charts (all inside lib/analytics/chart/):
+  stat_line_chart  : LineChartArea with baseLine, optional filled area gradient,
+                     gridlines, touch tooltip, horizontal drag disable pinch.
+  stat_bar_chart   : positive/negative + grouped income/expense/net bars.
+  stat_donut_chart : donut + animated rotation + center label that updates on
+                     slice tap (selected category / amount / %).
+  stat_histogram   : heatmap grid, darker = higher spend; tap day -> list.
+  stat_calendar    : monthly grid; each day shows income/expense/balance;
+                     tap -> day transactions.
+  stat_circular_gauge : arc gauge for ratio cards (DTI, budget, health).
+
+Reusable cards (each: loading/empty/error/data via small Stateful wrapper):
+  StatCard, StatSummaryCard, StatSegmentControl, recording as stacked "Stat*Card"
+  classes for the 20 requested statistics.
+
+Period buckets:  Daily | Weekly | Monthly | Yearly for trend/aggregation controls.
+
+ALL money shown via formatCurrency; all dates via intl after storing a shared
+DateTimeFormatSet; respects a user-selected display currency.
+
+--------------------------------------------------------------------------------
+7. THE 20 STATISTICS (module + widget mapping)
+--------------------------------------------------------------------------------
+  1. Balance Trend            -> stat_line_chart (filled area) + prev/current/diff/growth %
+  2. Cash Flow Summary        -> income/expense/net + amber progress bars + vs previous
+  3. Cash Flow Trend          -> stat_bar_chart (income/expense/net line) + segmented control
+                                  Trend | Cumulative
+  4. Spending by Categories   -> stat_donut_chart + selectable category legends
+      (segment: Categories | Tags)
+  5. Spending Trend           -> stat_bar_chart daily/weekly/monthly bars
+  6. Top Expenses             -> ordered list-card (5) tappable -> details
+  7. Debt-to-Income ratio     -> stat_circular_gauge (green/orange/red zones)
+  8. Income vs Expense        -> stat_bar_chart grouped (income/expense/net);
+                                  Daily/Weekly/Monthly/Yearly control
+  9. Monthly Overview         -> stat_card summary of 8 key figures
+ 10. Financial Health         -> stat_card with indicator chips (7 metrics)
+ 11. Category Analytics       -> stat_card grid per category (percent, avg, max/min,
+                                  count, per-day, monthly avg)
+ 12. Income Analytics          -> stat_donut_chart (income sources) + trend + largest
+ 13. Spending Heatmap         -> stat_histogram (github-style, tap -> day list)
+ 14. Calendar View            -> stat_calendar (tap -> transactions)
+ 15. Weekly Spending Pattern   -> stat_line_chart (Mon..Sun averages)
+ 16. Hourly Spending Pattern   -> stat_line_chart (24h)
+ 17. Budget Progress          -> stat_circular_gauge + progress bars + remaining
+                                  (color shifts green->yellow->red)
+ 18. Savings Trend            -> stat_line_chart (monthly savings + projected +
+                                  goal marker)
+ 19. Cash Flow Forecast        -> stat_line_chart with forecast tail marked
+ 20. Balance History          -> stat_line_chart (daily balance; 1W/1M/3M/6M/1Y)
+
+--------------------------------------------------------------------------------
+8. THEME  (LIGHT + DARK)
+--------------------------------------------------------------------------------
+- Introduce a ThemeService/controller storing `themeMode` (light/dark/system).
+- MaterialApp exposes @acceptable dark ThemeData (dark scaffold bg, Material 3
+  `ColorScheme.fromSeed(seed 0xFF..F59E0B, brightness: dark)`).
+- Every chart wrapper takes colors from `Theme.of(context)` + a charts
+  `ChartPalette` resolved per brightness so all cards adapt automatically.
+- Colors remain argument-injected (no hardcoded palette inside analytics widgets).
+
+--------------------------------------------------------------------------------
+9. RESPONSIVE + ACCESSIBILITY
+--------------------------------------------------------------------------------
+- LayoutBuilder / MediaQuery: charts keep aspect ratio and min tap targets;
+  single-column on phone, multi-column grid on >600dp.
+- Tooltips use Semantics / ExcludeSemantics; every actionable row is an
+  Inline Semantics button; contrast checked for dark/light.
+- Large text support: use Theme text styles (no fixed pixel sizes where a card
+  can scale); charts have minimum physical size set via media.
+- Landscape: wraps into a horizontal grid; cards keep min widths.
+
+--------------------------------------------------------------------------------
+10. PERFORMANCE
+--------------------------------------------------------------------------------
+- All computation cached in controller (section 5).
+- Only affected widgets subscribe to their own derived selector.
+- Charts: set `isInteractive`, disable pinch, reuse `FlTitlesData`; avoid
+  rebuilding the controller on frame callbacks.
+- Long heatmap/calendar built in O(n) with precomputed per-day maps.
+- No compute on build; compute is idempotent and memoized.
+
+--------------------------------------------------------------------------------
+10. ANIMATIONS
+--------------------------------------------------------------------------------
+- fl_chart built-in `curves`/`duration` for line/bar/circle entrance.
+- AnimatedSwitcher on center label of donut; implicit animations on cards.
+- TweenAnimationBuilder for balance/cash values when data changes.
+- AnimatedOpacity/AnimatedSlide for empty->data transitions.
+- All durations ~250-400ms easeOutCubic, matching app feel.
+
+--------------------------------------------------------------------------------
+11. ENTRY POINT / NAVIGATION
+--------------------------------------------------------------------------------
+- Add "Statistics" as an item in the dashboard `_AppDrawer` (dashboard_page).
+- It pushes `StatisticsPage` (MaterialPageRoute).
+- StatisticsPage is a simple composable Scaffold placing whichever cards the
+  user wants, each card accepting a range controller. Cards are reusable and
+  could equally be placed on dashboard or elsewhere.
+
+--------------------------------------------------------------------------------
+12. TESTING
+--------------------------------------------------------------------------------
+- unit: analytics_service.dart (aggregations, deltas, %, debt ratio, streaks).
+- unit: date_ranges + period math (previous window correctness, leap years).
+- widget: chart wrappers & stat cards loading/empty/error states.
+- widget: range change updates chart data (fake frame advances).
+- Keep isolated; avoid Firebase (no IO in these tests).
+
+--------------------------------------------------------------------------------
+13. IMPLEMENTATION PHASES (go one by one as requested)
+--------------------------------------------------------------------------------
+Phase 0 — Scaffolding: deps (fl_chart,intl), folder tree, DateRange/PeriodWindow
+           models, date_ranges/date_time_utils, theme additions (light+dark),
+           ChartPalette, skeleton StatisticsPage + drawer nav + nav Item.
+Phase 1 — Analytics engine: models + analytics_service + repository + controller
+           + caching/selectors + unit tests. (no UI)
+Phase 2 — Reusable chart wrappers (line, bar, donut, gauge, heatmap, calendar)
+           + tooltip + theme.
+Phase 3 — Generic stat-card scaffolds (loading/empty/error/data + summary).
+Phase 4 — Cards 1-4 (Balance Trend, Cash Flow Summary, Cash Flow Trend,
+           Spending Categories).
+Phase 5 — Cards 5-9 (Spending Trend, Top Expenses, DTI, Income-vs-Expense,
+           Monthly Overview).
+Phase 6 — Cards 10-14 (Financial Health, Category Analytics, Income Analytics,
+           Heatmap, Calendar).
+Phase 7 — Cards 15-20 (Weekly, Hourly, Budget Progress, Savings Trend,
+           Forecast, Balance History).
+Phase 8 — Final polish: responsiveness, dark mode QA, large-text QA, landscape,
+           optional Riverpod hybrid note (leave default to existing scope pattern).
+
+Each phase delivers: code + `flutter analyze` clean + passing widget/unit tests.
+
+--------------------------------------------------------------------------------
+14. OPEN QUESTIONS / NOTES
+--------------------------------------------------------------------------------
+- Riverpod is optional; we will use the app-scope NotifierController that's
+  already there. If an explicit Riverpod layer is desired later, the provider is
+  folder-level and interchangeable.
+- The performed module only ever READS the in-memory state; it never writes
+  Firestore.
+- No mock data: all charts pull from real `state.transactions/budgets/goals/debts`.
+- Chart library is fl_chart behind adapters so it can be replaced.
+
+================================================================================
+END OF PLAN
+================================================================================

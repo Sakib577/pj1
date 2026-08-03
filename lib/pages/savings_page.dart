@@ -445,7 +445,7 @@ class _SavingsGoalCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -480,7 +480,7 @@ class _SavingsGoalCard extends StatelessWidget {
                       Text(
                         goal.title,
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: Color(0xFF0F172A),
                         ),
@@ -489,7 +489,7 @@ class _SavingsGoalCard extends StatelessWidget {
                       Text(
                         goal.subtitle,
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           color: Color(0xFF6B7280),
                         ),
                       ),
@@ -513,7 +513,7 @@ class _SavingsGoalCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
@@ -521,7 +521,7 @@ class _SavingsGoalCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                     child: LinearProgressIndicator(
                       value: progress,
-                      minHeight: 11,
+                      minHeight: 9,
                       backgroundColor: const Color(0xFFF1F5F9),
                       valueColor: const AlwaysStoppedAnimation(
                         Color(0xFFF59E0B),
@@ -538,6 +538,11 @@ class _SavingsGoalCard extends StatelessWidget {
                   onPressed: onAddFunds,
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Add funds'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
               ],
             ),

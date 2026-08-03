@@ -3,10 +3,14 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../services/biometric_lock_service.dart';
+import '../services/app_lock_service.dart';
 import '../state/finance_app_state.dart';
+import 'pin_entry_sheet.dart';
 
-/// Keeps authenticated app content behind the phone's native biometric prompt.
+/// Keeps authenticated app content behind the configured app lock (biometric
+/// or PIN). A new lock session is created each time the app needs verification,
+/// so anything awaiting [AppLockContext.appLockUnlockReady] always waits on the
+/// *current* session and never a stale, already-completed future.
 class AppLockGate extends StatefulWidget {
   const AppLockGate({required this.child, super.key});
 
@@ -16,46 +20,50 @@ class AppLockGate extends StatefulWidget {
   State<AppLockGate> createState() => _AppLockGateState();
 }
 
-class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
+class _AppLockGateState extends State<AppLockGate>
+    with WidgetsBindingObserver {
   bool _locked = false;
   bool _authenticating = false;
-  bool? _settingSeen;
+  LockType? _settingSeen;
   bool _shouldLockOnResume = false;
   bool _autoPromptScheduled = false;
   bool _unlockedThisSession = false;
-  final Completer<void> _unlockReady = Completer<void>();
-  StreamSubscription<User?>? _authSubscription;
+  int _lockSessionId = 0;
+  Completer<void>? _sessionCompleter;
+
+  /// Replaced with a fresh, uncompleted future each time a lock session
+  /// begins, so dependents always wait on the current session.
+  final ValueNotifier<Future<void>> _unlockReady =
+      ValueNotifier<Future<void>>(Future<void>.value());
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
-      if (!mounted || user == null) return;
-      if (FinanceAppScope.of(context).biometricLockEnabled) {
-        _scheduleAutomaticUnlock();
-      }
-    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _authSubscription?.cancel();
+    _unlockReady.dispose();
     super.dispose();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final enabled = FinanceAppScope.of(context).biometricLockEnabled;
-    if (enabled == _settingSeen) return;
-    _settingSeen = enabled;
-    if (!enabled) {
+    final lockType = FinanceAppScope.of(context).lockType;
+    if (lockType == _settingSeen) return;
+    _settingSeen = lockType;
+    if (lockType == LockType.none) {
+      // Lock is (still) disabled: no session exists, so do NOT mark the app
+      // as "unlocked this session" — that flag would later suppress the first
+      // real lock prompt when the user enables the lock.
+      _unlockedThisSession = false;
       if (mounted) setState(() => _locked = false);
-      _completeUnlock();
+      _completeSession();
     } else if (FirebaseAuth.instance.currentUser != null) {
-      if (BiometricLockService.instance.wasRecentlyAuthenticated) {
+      if (AppLockService.instance.wasRecentlyAuthenticated) {
         _completeUnlock();
       } else {
         _scheduleAutomaticUnlock();
@@ -69,14 +77,16 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
     // events. Ignore those so the app never re-prompts right after a
     // successful verification (which caused duplicate prompts).
     if (_authenticating) return;
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
+    // Only a real background (paused) counts; incidental events like pulling
+    // down the notification shade (inactive) must not re-lock the app.
+    if (state == AppLifecycleState.paused) {
       _shouldLockOnResume = true;
       _unlockedThisSession = false;
     } else if (state == AppLifecycleState.resumed && _shouldLockOnResume) {
       _shouldLockOnResume = false;
-      final enabled = FinanceAppScope.of(context).biometricLockEnabled;
-      if (enabled && FirebaseAuth.instance.currentUser != null) {
+      final lockType = FinanceAppScope.of(context).lockType;
+      if (lockType != LockType.none &&
+          FirebaseAuth.instance.currentUser != null) {
         _scheduleAutomaticUnlock();
       }
     }
@@ -85,34 +95,71 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
   void _scheduleAutomaticUnlock() {
     if (_autoPromptScheduled || _authenticating || !mounted) return;
     if (_unlockedThisSession) return;
-    if (BiometricLockService.instance.wasRecentlyAuthenticated) {
+    if (AppLockService.instance.wasRecentlyAuthenticated) {
       _completeUnlock();
       return;
     }
     _autoPromptScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoPromptScheduled = false;
-      if (!mounted || !FinanceAppScope.of(context).biometricLockEnabled) {
-        return;
-      }
+      if (!mounted) return;
+      final lockType = FinanceAppScope.of(context).lockType;
+      if (lockType == LockType.none) return;
       if (FirebaseAuth.instance.currentUser != null) {
-        _lockAndAuthenticate();
+        _lockAndAuthenticate(lockType);
       }
     });
   }
 
-  /// Signals that the biometric requirement has been satisfied (or is not
-  /// needed) for the current lock session.
+  /// Starts a fresh lock session: increments the session id and swaps in a new
+  /// unfinished future so current waiters block on *this* verification.
+  void _beginLockSession() {
+    _lockSessionId++;
+    _unlockedThisSession = false;
+    final completer = Completer<void>();
+    if (_sessionCompleter != null && !_sessionCompleter!.isCompleted) {
+      _sessionCompleter!.complete();
+    }
+    _sessionCompleter = completer;
+    _unlockReady.value = completer.future;
+  }
+
+  /// Completes any pending session future without marking the current session
+  /// as verified (used when the lock is disabled).
+  void _completeSession() {
+    if (_sessionCompleter != null && !_sessionCompleter!.isCompleted) {
+      _sessionCompleter!.complete();
+    }
+    _sessionCompleter = null;
+  }
+
+  /// Completes the current session's unlock requirement.
   void _completeUnlock() {
-    if (!_unlockReady.isCompleted) _unlockReady.complete();
+    _completeSession();
     _unlockedThisSession = true;
   }
 
-  Future<void> _lockAndAuthenticate() async {
+  Future<void> _lockAndAuthenticate(LockType lockType) async {
     if (_authenticating || !mounted) return;
+    _beginLockSession();
+    final sessionId = _lockSessionId;
     setState(() => _locked = true);
     _authenticating = true;
-    final success = await BiometricLockService.instance.authenticate();
+    final success = await _authenticateWith(lockType);
+    _authenticating = false;
+    if (!mounted || sessionId != _lockSessionId) return;
+    if (success) {
+      setState(() => _locked = false);
+      _completeUnlock();
+    }
+  }
+
+  // Verifies the current session without starting a new one (used by the
+  // manual Unlock button on the lock screen).
+  Future<void> _unlockNow(LockType lockType) async {
+    if (_authenticating || !mounted) return;
+    _authenticating = true;
+    final success = await _authenticateWith(lockType);
     _authenticating = false;
     if (!mounted) return;
     if (success) {
@@ -121,21 +168,50 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
     }
   }
 
+  Future<bool> _authenticateWith(LockType lockType) async {
+    switch (lockType) {
+      case LockType.none:
+        return true;
+      case LockType.biometric:
+        return AppLockService.instance.authenticateBiometric();
+      case LockType.pin:
+        final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+        final pin = await showPinEntrySheet(
+          context,
+          title: 'Enter your PIN',
+          cancelLabel: 'Cancel',
+        );
+        if (pin == null) return false;
+        return AppLockService.instance.verifyPin(uid, pin);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final enabled = FinanceAppScope.of(context).biometricLockEnabled;
+    final lockType = FinanceAppScope.of(context).lockType;
     final user = FirebaseAuth.instance.currentUser;
-    if (!enabled || user == null || !_locked) {
+    // Safety net: if the user became available (or the lock setting loaded)
+    // after didChangeDependencies ran, still schedule the first verification.
+    // _scheduleAutomaticUnlock is guarded, so this is a no-op once scheduled
+    // or after a successful unlock this session.
+    if (lockType != LockType.none &&
+        user != null &&
+        !_locked &&
+        !_unlockedThisSession) {
+      _scheduleAutomaticUnlock();
+    }
+    if (lockType == LockType.none || user == null || !_locked) {
       return _AppLockScope(
         unlocked: true,
-        unlockReady: _unlockReady.future,
+        unlockReady: _unlockReady.value,
         child: widget.child,
       );
     }
 
+    final isPin = lockType == LockType.pin;
     return _AppLockScope(
       unlocked: false,
-      unlockReady: _unlockReady.future,
+      unlockReady: _unlockReady.value,
       child: Scaffold(
         backgroundColor: const Color(0xFFF7F5EF),
         body: Center(
@@ -144,10 +220,10 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.lock_outline,
+                Icon(
+                  isPin ? Icons.pin_outlined : Icons.lock_outline,
                   size: 64,
-                  color: Color(0xFFF59E0B),
+                  color: const Color(0xFFF59E0B),
                 ),
                 const SizedBox(height: 18),
                 const Text(
@@ -155,15 +231,21 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Unlock with your phone\'s fingerprint or face authentication.',
+                Text(
+                  isPin
+                      ? 'Unlock with your 4-digit PIN.'
+                      : 'Unlock with your phone\'s fingerprint or face '
+                            'authentication.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
                 FilledButton.icon(
-                  onPressed: _authenticating ? null : _lockAndAuthenticate,
-                  icon: const Icon(Icons.fingerprint),
-                  label: const Text('Unlock'),
+                  onPressed:
+                      _authenticating ? null : () => _unlockNow(lockType),
+                  icon: Icon(
+                    isPin ? Icons.pin_outlined : Icons.fingerprint,
+                  ),
+                  label: Text(isPin ? 'Enter PIN' : 'Unlock'),
                 ),
               ],
             ),
@@ -200,7 +282,7 @@ class _AppLockScope extends InheritedWidget {
 extension AppLockContext on BuildContext {
   bool get appLockUnlocked => _AppLockScope.unlockedFrom(this);
 
-  /// Completes once the app has been verified (or biometric lock is disabled),
-  /// so prompts only appear after the biometric verification.
+  /// Completes once the current lock session has been verified (or the app
+  /// lock is disabled), so prompts only appear after the lock screen.
   Future<void> get appLockUnlockReady => _AppLockScope.unlockReadyFrom(this);
 }

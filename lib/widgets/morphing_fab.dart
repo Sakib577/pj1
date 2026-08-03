@@ -56,10 +56,10 @@ class _MorphingFabState extends State<MorphingFab>
     super.didUpdateWidget(oldWidget);
     if (widget.label == oldWidget.label) return;
     if (widget.label != null) _displayLabel = widget.label;
-    if (widget.label == null) {
-      _controller.reverse();
-    } else {
+    if (oldWidget.label == null && widget.label != null) {
       _controller.forward(from: 0);
+    } else if (oldWidget.label != null && widget.label == null) {
+      _controller.reverse();
     }
   }
 
@@ -103,7 +103,9 @@ class _MorphingFabState extends State<MorphingFab>
             builder: (context, _) {
               final t = _widthFactor.value;
               final width = 56 + (_extendedWidth() - 56) * t;
-              return SizedBox(
+              return AnimatedContainer(
+                duration: widget.duration,
+                curve: Curves.easeInOutCubic,
                 width: width,
                 height: 56,
                 // FittedBox keeps the pill from overflowing during a Hero
@@ -132,15 +134,19 @@ class _MorphingFabState extends State<MorphingFab>
                                 left: 8,
                                 right: 20,
                               ),
-                              child: Text(
-                                _displayLabel ?? '',
-                                maxLines: 1,
-                                softWrap: false,
-                                overflow: TextOverflow.fade,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: widget.foregroundColor,
+                              child: AnimatedSwitcher(
+                                duration: widget.duration,
+                                child: Text(
+                                  _displayLabel ?? '',
+                                  key: ValueKey<String>(_displayLabel ?? ''),
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  overflow: TextOverflow.fade,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: widget.foregroundColor,
+                                  ),
                                 ),
                               ),
                             ),

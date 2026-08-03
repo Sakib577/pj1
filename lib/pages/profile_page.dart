@@ -2,7 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import '../services/app_lock_service.dart';
 import '../state/finance_app_state.dart';
+import '../widgets/pin_entry_sheet.dart';
 import 'settings_page.dart';
 
 class ProfilePage extends StatelessWidget {
@@ -200,25 +202,51 @@ class PrivacyPage extends StatelessWidget {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
-          SwitchListTile(
-            value: state.biometricLockEnabled,
-            onChanged: (value) async {
-              final changed = await state.setBiometricLockEnabled(value);
-              if (!context.mounted || changed || !value) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Biometric authentication was cancelled or is unavailable.',
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                ),
+          _LockTypeTile(
+            icon: Icons.lock_open_outlined,
+            title: 'None',
+            subtitle: 'No app lock required.',
+            selected: state.lockType == LockType.none,
+            onTap: () async {
+              final changed = await state.setLockType(LockType.none);
+              if (!context.mounted || changed) return;
+              _showMessage(context, 'Could not turn off the app lock.');
+            },
+          ),
+          _LockTypeTile(
+            icon: Icons.fingerprint,
+            title: 'Biometric',
+            subtitle: 'Fingerprint or face recognition.',
+            selected: state.lockType == LockType.biometric,
+            onTap: () async {
+              final changed = await state.setLockType(LockType.biometric);
+              if (!context.mounted || changed) return;
+              _showMessage(
+                context,
+                'Biometric authentication was cancelled or is unavailable.',
               );
             },
-            title: const Text('App lock'),
-            subtitle: const Text(
-              'Use your phone\'s fingerprint, face, or other biometric to unlock.',
-            ),
           ),
+          _LockTypeTile(
+            icon: Icons.pin_outlined,
+            title: 'PIN',
+            subtitle: 'A 4-digit code stored only on this device.',
+            selected: state.lockType == LockType.pin,
+            onTap: () async {
+              final pin = await showPinEntrySheet(
+                context,
+                title: 'Set your PIN',
+                confirmPin: true,
+                cancelLabel: 'Cancel',
+              );
+              if (pin == null) return;
+              if (!context.mounted) return;
+              final changed = await state.setLockType(LockType.pin, pin: pin);
+              if (!context.mounted || changed) return;
+              _showMessage(context, 'Could not set the PIN.');
+            },
+          ),
+          const Divider(height: 32),
           const ListTile(
             leading: Icon(Icons.cloud_done_outlined),
             title: Text('Private cloud sync'),
@@ -227,6 +255,65 @@ class PrivacyPage extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showMessage(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+}
+
+class _LockTypeTile extends StatelessWidget {
+  const _LockTypeTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = const Color(0xFFF59E0B);
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: selected ? accent : Colors.transparent,
+          width: 1.5,
+        ),
+      ),
+      child: ListTile(
+        leading: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF4E8),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: accent),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(subtitle),
+        trailing: Icon(
+          selected ? Icons.radio_button_checked : Icons.radio_button_off,
+          color: selected ? accent : const Color(0xFF9CA3AF),
+        ),
+        onTap: onTap,
       ),
     );
   }

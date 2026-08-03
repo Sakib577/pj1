@@ -42,6 +42,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // Controls which bottom-tab page is currently visible.
   int _navIndex = 0;
+  bool _drawerOpen = false;
 
   void _measureNavBar() {
     final h = _navBarKey.currentContext?.size?.height;
@@ -318,6 +319,16 @@ class _DashboardPageState extends State<DashboardPage> {
       );
     }
 
+    final navH = _navBarHeight;
+    _FabPosition targetFabPos;
+    if (_navIndex == 0) {
+      targetFabPos = _FabPosition(0.0, navH - 28, 0.0);
+    } else {
+      // Budgets, Savings and Debts all share the same endFloat position;
+      // only the label morphs when switching between them.
+      targetFabPos = _FabPosition(1.0, navH + 16, 16.0);
+    }
+
     // Screen-level Stack so the FAB overlay can dip into the bottom bar's
     // notch (matching the original centerDocked placement of the Home button)
     // while still flying across the bar on tab switches.
@@ -325,6 +336,11 @@ class _DashboardPageState extends State<DashboardPage> {
       children: [
         Scaffold(
           key: _scaffoldKey,
+          onDrawerChanged: (open) {
+            if (mounted && open != _drawerOpen) {
+              setState(() => _drawerOpen = open);
+            }
+          },
           appBar: AppBar(
             toolbarHeight: 72,
             automaticallyImplyLeading: false,
@@ -518,27 +534,62 @@ class _DashboardPageState extends State<DashboardPage> {
         showFab: isHome,
       ),
         ),
-        Positioned.fill(
-          child: TweenAnimationBuilder<double>(
-            tween: Tween<double>(end: isHome ? 0 : 1),
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeInOutCubic,
-            child: actionFab ?? const SizedBox.shrink(),
-            builder: (context, t, child) {
-              final navH = _navBarHeight;
-              final bottom = navH - 28 + 44 * t;
-              return Align(
-                alignment: Alignment(t, 1),
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: bottom, right: 16 * t),
-                  child: child,
-                ),
-              );
-            },
+        IgnorePointer(
+          ignoring: _drawerOpen,
+          child: AnimatedOpacity(
+            opacity: _drawerOpen ? 0 : 1,
+            duration: const Duration(milliseconds: 180),
+            child: Positioned.fill(
+              child: TweenAnimationBuilder<_FabPosition>(
+                tween: _FabPositionTween(end: targetFabPos),
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeInOutCubic,
+                child: actionFab ?? const SizedBox.shrink(),
+                builder: (context, pos, child) {
+                  return Align(
+                    alignment: Alignment(pos.alignX, 1),
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        bottom: pos.bottomOffset,
+                        right: pos.rightPadding,
+                      ),
+                      child: child,
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ],
     );
+  }
+}
+
+class _FabPosition {
+  final double alignX;
+  final double bottomOffset;
+  final double rightPadding;
+
+  const _FabPosition(this.alignX, this.bottomOffset, this.rightPadding);
+
+  static _FabPosition lerp(_FabPosition a, _FabPosition b, double t) {
+    return _FabPosition(
+      a.alignX + (b.alignX - a.alignX) * t,
+      a.bottomOffset + (b.bottomOffset - a.bottomOffset) * t,
+      a.rightPadding + (b.rightPadding - a.rightPadding) * t,
+    );
+  }
+}
+
+class _FabPositionTween extends Tween<_FabPosition> {
+  _FabPositionTween({required _FabPosition super.end});
+
+  @override
+  _FabPosition lerp(double t) {
+    final a = begin ?? end ?? const _FabPosition(0, 0, 0);
+    final b = end ?? begin ?? const _FabPosition(0, 0, 0);
+    return _FabPosition.lerp(a, b, t);
   }
 }
 

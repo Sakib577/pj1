@@ -8,8 +8,8 @@ import '../services/category_repository.dart';
 import '../services/currency_preferences.dart';
 import '../services/exchange_rate_service.dart';
 import '../services/finance_repository.dart';
+import '../services/app_lock_service.dart';
 import '../services/payment_reminder_service.dart';
-import '../services/biometric_lock_service.dart';
 import '../utils/currency_settings.dart';
 import '../utils/currency_formatters.dart';
 
@@ -52,11 +52,15 @@ class FinanceAppState extends ChangeNotifier {
   SyncStatus _syncStatus = SyncStatus.synced;
   bool _paymentNotificationsEnabled = true;
   bool _budgetNotificationsEnabled = true;
-  bool _biometricLockEnabled = false;
+  LockType _lockType = LockType.none;
 
   bool get paymentNotificationsEnabled => _paymentNotificationsEnabled;
   bool get budgetNotificationsEnabled => _budgetNotificationsEnabled;
-  bool get biometricLockEnabled => _biometricLockEnabled;
+  LockType get lockType => _lockType;
+
+  // Kept for backwards compatibility with any remaining callers that only care
+  // about the biometric variant of the app lock.
+  bool get biometricLockEnabled => _lockType == LockType.biometric;
 
   // Whether the user's records are currently offline, syncing, or synced. Lets
   // the UI show a banner so the user knows edits are stored locally for now.
@@ -767,8 +771,18 @@ class FinanceAppState extends ChangeNotifier {
           preferences['paymentNotificationsEnabled'] as bool? ?? true;
       _budgetNotificationsEnabled =
           preferences['budgetNotificationsEnabled'] as bool? ?? true;
-      _biometricLockEnabled =
-          preferences['biometricLockEnabled'] as bool? ?? false;
+      final storedLockType = preferences['lockType'] as String?;
+      if (storedLockType != null) {
+        _lockType = LockType.values.firstWhere(
+          (type) => type.name == storedLockType,
+          orElse: () => LockType.none,
+        );
+      } else {
+        // Migrate the legacy boolean preference.
+        _lockType = (preferences['biometricLockEnabled'] as bool? ?? false)
+            ? LockType.biometric
+            : LockType.none;
+      }
     } catch (_) {}
 
     _recomputeTotals();
@@ -916,7 +930,7 @@ class FinanceAppState extends ChangeNotifier {
     _isLoadingData = false;
     _paymentNotificationsEnabled = true;
     _budgetNotificationsEnabled = true;
-    _biometricLockEnabled = false;
+    _lockType = LockType.none;
     _syncStatus = SyncStatus.synced;
     _recomputeTotals();
   }
@@ -1051,19 +1065,33 @@ class FinanceAppState extends ChangeNotifier {
     );
   }
 
-  Future<bool> setBiometricLockEnabled(bool value) async {
-    if (value) {
-      final service = BiometricLockService.instance;
-      if (!await service.isAvailable() || !await service.authenticate()) {
-        return false;
-      }
+  /// Switches the app-lock verification method. For [LockType.pin] a [pin]
+  /// must be provided (it is stored locally, hashed, under the user's key).
+  /// Returns false when the requested method could not be enabled.
+  Future<bool> setLockType(LockType type, {String? pin}) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    switch (type) {
+      case LockType.biometric:
+        final service = AppLockService.instance;
+        if (!await service.isBiometricAvailable() ||
+            !await service.authenticateBiometric()) {
+          return false;
+        }
+      case LockType.pin:
+        if (pin == null || pin.length < 4) return false;
+        await AppLockService.instance.setPin(uid, pin);
+      case LockType.none:
+        break;
     }
-    _biometricLockEnabled = value;
+    if (type != LockType.pin) {
+      await AppLockService.instance.clearPin(uid);
+    }
+    _lockType = type;
     notifyListeners();
     unawaited(
       _write(
         (uid) => _financeRepository.savePreferences(uid, {
-          'biometricLockEnabled': value,
+          'lockType': type.name,
         }),
       ),
     );

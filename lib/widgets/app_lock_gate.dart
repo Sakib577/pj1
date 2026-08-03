@@ -99,6 +99,11 @@ class _AppLockGateState extends State<AppLockGate>
       _completeUnlock();
       return;
     }
+    // Begin the lock session synchronously here, not only in the async prompt
+    // below, so that anything awaiting AppLockContext.appLockUnlockReady (e.g.
+    // the dashboard's due-payment check) sees an unfinished session future and
+    // blocks until this verification actually completes.
+    _beginLockSession();
     _autoPromptScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoPromptScheduled = false;
@@ -112,14 +117,13 @@ class _AppLockGateState extends State<AppLockGate>
   }
 
   /// Starts a fresh lock session: increments the session id and swaps in a new
-  /// unfinished future so current waiters block on *this* verification.
+  /// unfinished future so current waiters block on *this* verification. If a
+  /// session is already pending, it is left untouched (idempotent).
   void _beginLockSession() {
+    if (_sessionCompleter != null) return;
     _lockSessionId++;
     _unlockedThisSession = false;
     final completer = Completer<void>();
-    if (_sessionCompleter != null && !_sessionCompleter!.isCompleted) {
-      _sessionCompleter!.complete();
-    }
     _sessionCompleter = completer;
     _unlockReady.value = completer.future;
   }
@@ -143,29 +147,39 @@ class _AppLockGateState extends State<AppLockGate>
     if (_authenticating || !mounted) return;
     _beginLockSession();
     final sessionId = _lockSessionId;
-    setState(() => _locked = true);
-    _authenticating = true;
+    setState(() {
+      _locked = true;
+      _authenticating = true;
+    });
     final success = await _authenticateWith(lockType);
-    _authenticating = false;
-    if (!mounted || sessionId != _lockSessionId) return;
-    if (success) {
-      setState(() => _locked = false);
-      _completeUnlock();
+    if (!mounted) return;
+    if (sessionId != _lockSessionId) {
+      setState(() => _authenticating = false);
+      return;
     }
+    setState(() {
+      _authenticating = false;
+      if (success) {
+        _locked = false;
+        _completeUnlock();
+      }
+    });
   }
 
   // Verifies the current session without starting a new one (used by the
   // manual Unlock button on the lock screen).
   Future<void> _unlockNow(LockType lockType) async {
     if (_authenticating || !mounted) return;
-    _authenticating = true;
+    setState(() => _authenticating = true);
     final success = await _authenticateWith(lockType);
-    _authenticating = false;
     if (!mounted) return;
-    if (success) {
-      setState(() => _locked = false);
-      _completeUnlock();
-    }
+    setState(() {
+      _authenticating = false;
+      if (success) {
+        _locked = false;
+        _completeUnlock();
+      }
+    });
   }
 
   Future<bool> _authenticateWith(LockType lockType) async {

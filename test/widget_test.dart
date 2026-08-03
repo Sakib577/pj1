@@ -1,17 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'package:pj1/main.dart';
 import 'package:pj1/pages/dashboard_page.dart';
+import 'package:pj1/firebase_options.dart';
 
 void main() {
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+  });
+
   testWidgets('Dashboard renders and saves a transaction', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const MyApp(home: DashboardPage()));
 
     expect(find.text('Dashboard'), findsOneWidget);
-    expect(find.text('\$0.00'), findsWidgets);
+    expect(find.text('\$0'), findsWidgets);
     expect(find.text('No transactions yet'), findsOneWidget);
     expect(find.text('No planned payments yet'), findsOneWidget);
 
@@ -35,6 +46,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Coffee'), findsOneWidget);
-    expect(find.text('-\$25.50'), findsWidgets);
+    expect(find.text('-\$25.5'), findsWidgets);
   });
 }

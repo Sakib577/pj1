@@ -307,11 +307,12 @@ Recommended next work
    database as the primary source of truth. Firestore's on-device queue already
    replays offline writes, but conflicts (same record edited on two devices) are
    last-write-wins.
-5. Notifications currently rely on the app being opened to reschedule; consider an
-   Android background scheduler/periodic task so changed reminders are refreshed
-   even when the app has not been opened.
-6. Fix test/widget_test.dart so it matches the new Add Transaction calculator-keypad
-   flow (it currently fails because it taps old keys that no longer exist).
+5. Android boot/package-replaced receivers are configured so pending reminders
+   survive reboot and app replacement. A future background scheduler could refresh
+   changed reminders while the app remains unopened; this requires Android-specific
+   background work and careful Firestore authentication.
+6. Expand widget and integration coverage around Firebase sync, notification
+   permissions, dialog flows, and offline behavior.
 7. Add password reset, resend-email cooldown, account deletion, error telemetry, and
    App Check before production release.
 
@@ -320,7 +321,7 @@ Development notes
 - Run web: flutter run -d chrome
 - Run Android: flutter run -d <device-id>
 - Build debug APK: flutter build apk --debug
-- Test: flutter test  (currently FAILING; see item 6 above)
+- Test: flutter test
 - Flutter analyze: reports no issues (clean).
 - Android build.gradle.kts enables core library desugaring
   (coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4') because

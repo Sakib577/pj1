@@ -6,8 +6,22 @@ import 'package:timezone/timezone.dart' as tz;
 import '../models/finance_models.dart';
 import '../utils/currency_formatters.dart';
 
-/// Schedules local Android reminders for planned payments: one two days before
-/// the due date and one on the due date itself.
+class PaymentReminderPlan {
+  const PaymentReminderPlan({
+    required this.daysBefore,
+    required this.date,
+    required this.title,
+    required this.body,
+  });
+
+  final int daysBefore;
+  final tz.TZDateTime date;
+  final String title;
+  final String body;
+}
+
+/// Schedules local Android reminders for planned payments two days before, one
+/// day before, and on the due date itself.
 class PaymentReminderService {
   PaymentReminderService._();
 
@@ -75,43 +89,58 @@ class PaymentReminderService {
 
     final now = tz.TZDateTime.now(tz.local);
     for (final payment in payments) {
-      final due = payment.nextDue();
-      final dueDate = _atHour(due, _reminderHour);
-      if (dueDate.isAfter(now)) {
+      for (final plan in buildReminderPlan(payment, now: now)) {
+        final offset = switch (plan.daysBefore) {
+          2 => _reminderIdOffset,
+          1 => _tomorrowIdOffset,
+          _ => _dueIdOffset,
+        };
         await _schedule(
-          id: _dueIdOffset + _stableId(payment.id),
-          date: dueDate,
-          title: 'Payment due today',
-          body:
-              '${payment.title} · ${payment.isIncome ? '+' : '-'}'
-              '${formatCurrency(payment.amount)}',
-        );
-      }
-      final reminderDate = dueDate.subtract(const Duration(days: 2));
-      if (reminderDate.isAfter(now)) {
-        await _schedule(
-          id: _reminderIdOffset + _stableId(payment.id),
-          date: reminderDate,
-          title: 'Payment coming up in 2 days',
-          body:
-              '${payment.title} is due in 2 days · '
-              '${payment.isIncome ? '+' : '-'}'
-              '${formatCurrency(payment.amount)}',
-        );
-      }
-      final tomorrowDate = dueDate.subtract(const Duration(days: 1));
-      if (tomorrowDate.isAfter(now)) {
-        await _schedule(
-          id: _tomorrowIdOffset + _stableId(payment.id),
-          date: tomorrowDate,
-          title: 'Payment coming up in 1 day',
-          body:
-              '${payment.title} is due tomorrow · '
-              '${payment.isIncome ? '+' : '-'}'
-              '${formatCurrency(payment.amount)}',
+          id: offset + _stableId(payment.id),
+          date: plan.date,
+          title: plan.title,
+          body: plan.body,
         );
       }
     }
+  }
+
+  static List<PaymentReminderPlan> buildReminderPlan(
+    PlannedPayment payment, {
+    tz.TZDateTime? now,
+  }) {
+    final current = now ?? tz.TZDateTime.now(tz.local);
+    final due = payment.nextDue(from: current);
+    final dueDate = tz.TZDateTime(
+      tz.local,
+      due.year,
+      due.month,
+      due.day,
+      _reminderHour,
+    );
+    final sign = payment.isIncome ? '+' : '-';
+    final amount = formatCurrency(payment.amount);
+    final plans = <PaymentReminderPlan>[];
+    for (final daysBefore in [2, 1, 0]) {
+      final date = dueDate.subtract(Duration(days: daysBefore));
+      if (!date.isAfter(current)) continue;
+      final title = daysBefore == 0
+          ? 'Payment due today'
+          : 'Payment coming up in $daysBefore ${daysBefore == 1 ? 'day' : 'days'}';
+      final body = daysBefore == 0
+          ? '${payment.title} · $sign$amount'
+          : '${payment.title} is due in $daysBefore '
+                '${daysBefore == 1 ? 'day' : 'days'} · $sign$amount';
+      plans.add(
+        PaymentReminderPlan(
+          daysBefore: daysBefore,
+          date: date,
+          title: title,
+          body: body,
+        ),
+      );
+    }
+    return plans;
   }
 
   Future<void> _schedule({
@@ -136,12 +165,6 @@ class PaymentReminderService {
         ),
       ),
     );
-  }
-
-  tz.TZDateTime _atHour(DateTime date, int hour) {
-    final local = tz.local;
-    final current = tz.TZDateTime(local, date.year, date.month, date.day, hour);
-    return current;
   }
 
   int _stableId(String id) {

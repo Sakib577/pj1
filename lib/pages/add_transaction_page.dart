@@ -698,6 +698,7 @@ class _KeyCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
+      key: ValueKey('key-$label'),
       height: height,
       width: double.infinity,
       child: InkWell(

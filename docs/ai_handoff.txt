@@ -7,8 +7,26 @@ This is a Flutter expense tracker for Android and Web. It has a polished UI shel
 email/password authentication, email verification, Firestore access control,
 per-user categories synced to Firestore, and transactions / planned payments /
 debts / shopping-list items persisted to Firestore with live snapshot sync. Local
-Android notifications remind about upcoming planned payments (2 days before and on
-the due day). Budgets and savings goals are still in-memory UI shells.
+Android notifications remind about upcoming planned payments two days before, one
+day before, and on the due day. Budgets and savings goals are persisted to
+Firestore and support editing.
+
+Recent implementation notes (August 2026)
+------------------------------------------
+- Budgets support create, edit, delete, repeating periods, and Firestore persistence.
+- Savings is the renamed Savings Goals page. Goals support create, edit, delete,
+  add funds, withdraw funds, Firestore persistence, and Active/Completed sections.
+  Withdrawals are bounded by the current balance and recorded as reversal/income
+  transactions; a completed goal returns to Active when withdrawn below target.
+- Planned-payment editing includes the start-date picker. Reminders are scheduled
+  locally at 9 AM for two days before, one day before, and the due day.
+- The Notifications page shows the latest 10 reminder messages using the same
+  titles and bodies as local phone notifications, without "Planned payment added".
+- Dialog text controllers remain alive through closing animations before disposal.
+  This applies to savings, budgets, transactions, planned payments, and category
+  dialogs, preventing disposed-controller and cascading framework errors.
+- Category cards clip rounded press feedback and remove ExpansionTile divider
+  artifacts. Other Income uses a gift-card icon instead of the generic category icon.
 
 Technology
 ----------
@@ -33,7 +51,7 @@ Important files
 - lib/pages/email_verification_page.dart: resend verification email and refresh
   verification state.
 - lib/pages/dashboard_page.dart: home screen with bottom navigation (Home, Budgets,
-  Savings Goals, Profile) and the side drawer that opens the tools. On first load it
+  Savings, Profile) and the side drawer that opens the tools. On first load it
   syncs user data (categories + persisted records) and then checks planned payments
   that are due today or overdue, showing a "Payments due" dialog with Confirm &
   record / Skip.
@@ -46,10 +64,10 @@ Important files
   Transaction.
 - lib/pages/category_detail_page.dart: reusable parent-category/subcategory selector
   used by Add Transaction.
-- lib/pages/budget_page.dart: Budgets tab UI (summary card, "Create New Budget"
-  button, per-category cards). Fed from in-memory budgets; empty until budgets exist.
-- lib/pages/savings_page.dart: Savings Goals tab UI (progress card, "Create New
-  Goal" button, filter). Fed from in-memory goals; empty until goals exist.
+- lib/pages/budget_page.dart: Budgets tab UI with create/edit/delete actions,
+  repeating periods, per-category cards, and Firestore persistence.
+- lib/pages/savings_page.dart: Savings tab UI with create/edit/delete, add/withdraw
+  funds, Active/Completed sections, and Firestore persistence.
 - lib/pages/transactions_page.dart: "Recent Transactions" page with All / Income /
   Expenses filter segments and the same tile theme as the dashboard list. Tapping a
   tile opens an action sheet with Edit (amount, income/expense, note) and Delete
@@ -98,19 +116,11 @@ Important files
   picker for user-defined ones or derived from a curated default map. The state
   tracks SyncStatus (synced / offline / pending) from the transactions snapshot
   metadata and exposes syncStatus, isOffline, and hasPendingSync.
-- lib/state/finance_app_state.dart (FinanceAppScope): FinanceAppScope extends
-  InheritedNotifier<FinanceAppState> and is created once in main.dart around
-  MaterialApp. Every widget that calls FinanceAppScope.of(context) registers as a
-  dependent and is rebuilt automatically whenever the state notifies - INCLUDING
-  pushed routes (Navigator caches route widgets, which is why the earlier
-  root-ListenableBuilder approach could not refresh pushed pages such as the
-  Settings/currency screen). notifyListeners() is overridden to defer the real
-  notification to just after the current frame (addPostFrameCallback) and to
-  coalesce bursts in the same frame; this deferral is what makes notifying during
-  route/dialog pops safe and avoids Flutter's InheritedElement '_dependents.isEmpty'
-  assertion. This single mechanism is why the UI updates instantly on every state
-  change (new transaction, currency switch, live Firestore snapshot, offline/
-  syncing flag) without needing to leave and re-enter a page.
+- lib/state/finance_app_state.dart (FinanceAppScope): FinanceAppScope is a regular
+  InheritedWidget carrying FinanceAppState. MyApp listens to the state and updates
+  a revision number on the scope, avoiding the fragile InheritedNotifier/dialog
+  lifecycle path that caused Flutter '_dependents.isEmpty' assertions. Dialog
+  controller disposal is delayed until route transitions finish.
 - lib/services/category_repository.dart: reads/writes/seeds categories in Firestore
   at users/{uid}/expense_categories and users/{uid}/income_categories and exposes a
   live snapshot stream.
@@ -122,7 +132,7 @@ Important files
   metadata (includeMetadataChanges: true).
 - lib/services/payment_reminder_service.dart: wraps flutter_local_notifications +
   flutter_timezone + timezone to schedule Android reminders at 9 AM local time two
-  days before each planned payment's due date and on the due date itself. Reschedules
+  days before, one day before, and on each planned payment's due date. Reschedules
   (cancel-all + re-add) on every app open or payment change.
 - lib/services/exchange_rate_service.dart: fetches USD exchange rates from
   ExchangeRate-API.
@@ -181,11 +191,11 @@ Authentication and security
 
 Current behavior
 ----------------
-- A verified user can sign in, view the dashboard, add an in-memory transaction, and
+- A verified user can sign in, view the dashboard, add a transaction, and
   sign out.
-- The dashboard has four bottom tabs (Home, Budgets, Savings Goals, Profile) plus a
+- The dashboard has four bottom tabs (Home, Budgets, Savings, Profile) plus a
   side drawer with Dashboard, Categories, Planned Payments, Debts, Shopping List,
-  Budgets, Savings Goals, Profile & Settings, Currency Converter, and Export Report.
+  Budgets, Savings, Profile & Settings, Currency Converter, and Export Report.
   The "View All" links on Recent Transactions and Planned Payments open dedicated
   pages. Several buttons (notifications, more options) only show placeholder
   snackbars.
@@ -251,12 +261,10 @@ Current behavior
   single font size computed from the longest amount (so a huge Income shrinks BOTH
   cards), the balance font shrinks for very large totals, and both are wrapped in
   FittedBox(scaleDown) so numbers never overflow.
-- Because FinanceAppScope is an InheritedNotifier, every screen that reads app
-  state rebuilds the instant state changes - there is no need to leave and
-  re-enter a page to see fresh values. Live Firestore snapshot updates, new
-  transactions, the offline/syncing banner, and a currency change in the Settings
-  picker all appear immediately (the Settings "Select currency" subtitle updates
-  the moment a new currency is picked).
+- FinanceAppScope is a regular InheritedWidget updated by MyApp's state listener;
+  screens reading app state rebuild on state changes without the former
+  InheritedNotifier dialog-lifecycle problem. Live Firestore updates, new
+  transactions, the offline/syncing banner, and currency changes appear immediately.
 - Transactions, planned payments, debts, and shopping-list items are persisted to
   Firestore under users/{uid}/transactions, users/{uid}/planned_payments,
   users/{uid}/debts, and users/{uid}/shopping_items. The state subscribes to live
@@ -268,18 +276,18 @@ Current behavior
   locally") or has pending local writes ("Syncing…"), driven by SyncStatus surfaced
   from the transactions snapshot metadata. Transactions
   can be edited (amount / income-expense / note) or deleted from the Recent
-  Transactions page. Budgets and savings goals are still in-memory UI shells.
-- Android local notifications remind about planned payments: a "Payment coming up"
-  notification 2 days before the due date and a "Due today" notification on the due
-  date, both at 9 AM device-local time. Reminders are (re)scheduled on every app
+  Transactions page. Budgets and savings goals are persisted and editable.
+- Android local notifications remind about planned payments with "Payment coming up
+  in 2 days", "Payment coming up in 1 day", and "Payment due today" notifications,
+  all at 9 AM device-local time. Reminders are (re)scheduled on every app
   open and whenever payments change. Android core library desugaring is enabled in
   android/app/build.gradle.kts (required by flutter_local_notifications), the
   manifest declares RECEIVE_BOOT_COMPLETED plus the plugin's scheduled-notification
   receivers, and a white notification_icon drawable is provided. The
   POST_NOTIFICATIONS runtime prompt is requested on Android 13+ via
   PaymentReminderService.
-- The Budgets and Savings Goals tabs are UI shells with empty states and placeholder
-  buttons; they do not create or store any data yet.
+- Budgets and Savings tabs create, edit, delete, and persist their records. Savings
+  also supports adding/withdrawing funds and Active/Completed goal sections.
 - The report feature copies a plain-text report to the clipboard. Add a real
   CSV/PDF download once report records are persisted.
 
@@ -299,9 +307,9 @@ Recommended next work
    database as the primary source of truth. Firestore's on-device queue already
    replays offline writes, but conflicts (same record edited on two devices) are
    last-write-wins.
-5. Add a creation flow for budgets and savings goals (currently UI shells with no
-   data to persist), then persist them. Notifications currently rely on the app
-   being opened to reschedule; consider an on-device scheduler/periodic task.
+5. Notifications currently rely on the app being opened to reschedule; consider an
+   Android background scheduler/periodic task so changed reminders are refreshed
+   even when the app has not been opened.
 6. Fix test/widget_test.dart so it matches the new Add Transaction calculator-keypad
    flow (it currently fails because it taps old keys that no longer exist).
 7. Add password reset, resend-email cooldown, account deletion, error telemetry, and

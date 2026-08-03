@@ -5,11 +5,18 @@ import '../state/finance_app_state.dart';
 import '../utils/currency_formatters.dart';
 import '../utils/currency_settings.dart';
 
-class SavingsPage extends StatelessWidget {
+class SavingsPage extends StatefulWidget {
   const SavingsPage({super.key, required this.overview, required this.goals});
 
   final SavingsOverview overview;
   final List<SavingsGoal> goals;
+
+  @override
+  State<SavingsPage> createState() => _SavingsPageState();
+}
+
+class _SavingsPageState extends State<SavingsPage> {
+  bool _showCompleted = false;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +29,7 @@ class SavingsPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SavingsProgressCard(overview: overview),
+            _SavingsProgressCard(overview: widget.overview),
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
@@ -41,36 +48,24 @@ class SavingsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Active Goals',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-                TextButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Filter tapped'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.tune, size: 18),
-                  label: const Text('Filter'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFF59E0B),
-                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF2F7),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  Expanded(child: _SavingsSectionButton(label: 'Active Goals', selected: !_showCompleted, onTap: () => setState(() => _showCompleted = false))),
+                  Expanded(child: _SavingsSectionButton(label: 'Completed Goals', selected: _showCompleted, onTap: () => setState(() => _showCompleted = true))),
+                ],
+              ),
             ),
             const SizedBox(height: 8),
-            if (goals.isEmpty)
+            if (_visibleGoals.isEmpty)
               const _SavingsEmptyState()
             else
-              for (final goal in goals) ...[
+              for (final goal in _visibleGoals) ...[
                 _SavingsGoalCard(
                   goal: goal,
                   onTap: () => _showActions(context, goal),
@@ -84,6 +79,10 @@ class SavingsPage extends StatelessWidget {
       ),
     );
   }
+
+  List<SavingsGoal> get _visibleGoals => widget.goals
+      .where((goal) => (goal.current >= goal.target) == _showCompleted)
+      .toList();
 
   Future<void> _createGoal(BuildContext context) async {
     final title = TextEditingController();
@@ -282,6 +281,29 @@ class _SavingsEmptyState extends StatelessWidget {
   }
 }
 
+class _SavingsSectionButton extends StatelessWidget {
+  const _SavingsSectionButton({required this.label, required this.selected, required this.onTap});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? Colors.white : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, color: selected ? const Color(0xFFB45309) : const Color(0xFF64748B))),
+        ),
+      ),
+    );
+  }
+}
+
 class _SavingsProgressCard extends StatelessWidget {
   const _SavingsProgressCard({required this.overview});
 
@@ -437,21 +459,16 @@ class _SavingsGoalCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: goal.statusBg,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
+                Flexible(
                   child: Text(
-                    goal.status,
-                    style: TextStyle(
-                      color: goal.statusColor,
+                    '${formatCurrencyNoCents(goal.current)} / ${formatCurrencyNoCents(goal.target)}',
+                    textAlign: TextAlign.right,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      fontSize: 11,
+                      color: Color(0xFF334155),
                     ),
                   ),
                 ),
@@ -459,42 +476,31 @@ class _SavingsGoalCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  '${formatCurrencyNoCents(goal.current)} / ${formatCurrencyNoCents(goal.target)}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF334155),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 11,
+                      backgroundColor: const Color(0xFFF1F5F9),
+                      valueColor: const AlwaysStoppedAnimation(
+                        Color(0xFFF59E0B),
+                      ),
+                    ),
                   ),
                 ),
+                const SizedBox(width: 10),
                 Text(
                   '${(progress * 100).round()}%',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF6B7280),
-                  ),
+                  style: const TextStyle(color: Color(0xFF6B7280)),
+                ),
+                TextButton.icon(
+                  onPressed: onAddFunds,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add funds'),
                 ),
               ],
-            ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 11,
-                backgroundColor: const Color(0xFFF1F5F9),
-                valueColor: const AlwaysStoppedAnimation(Color(0xFFF59E0B)),
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: onAddFunds,
-                icon: const Icon(Icons.add),
-                label: const Text('Add funds'),
-              ),
             ),
           ],
         ),

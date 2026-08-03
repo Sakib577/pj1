@@ -47,6 +47,7 @@ class FinanceAppState extends ChangeNotifier {
   StreamSubscription<List<SavingsGoal>>? _goalSubscription;
   StreamSubscription<List<AppNotification>>? _notificationSubscription;
   bool _notifyScheduled = false;
+  Timer? _notifyTimer;
   bool _disposed = false;
   bool _currencyNeedsSetup = false;
   SyncStatus _syncStatus = SyncStatus.synced;
@@ -77,7 +78,9 @@ class FinanceAppState extends ChangeNotifier {
   void notifyListeners() {
     if (_notifyScheduled) return;
     _notifyScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Give route/dialog deactivation (especially a closing AlertDialog) time
+    // to finish before InheritedNotifier marks its dependents dirty.
+    _notifyTimer = Timer(const Duration(milliseconds: 350), () {
       _notifyScheduled = false;
       if (_disposed) return;
       super.notifyListeners();
@@ -87,6 +90,7 @@ class FinanceAppState extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _notifyTimer?.cancel();
     _stopSync();
     super.dispose();
   }

@@ -484,6 +484,7 @@ class _BudgetCategoryCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                const SizedBox(width: 24),
                 Text(
                   '${formatCurrency(item.spent)} / ${formatCurrency(item.limit)}',
                   textAlign: TextAlign.right,

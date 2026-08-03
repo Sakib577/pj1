@@ -263,6 +263,10 @@ Future<(String, String?)?> promptSubCategoryLogo(BuildContext context) async {
       ],
     ),
   );
+  // showDialog completes as soon as the route starts popping. Keep the
+  // controllers alive through the closing animation so TextField does not
+  // rebuild with a disposed controller.
+  await Future<void>.delayed(const Duration(milliseconds: 300));
   nameController.dispose();
   emojiController.dispose();
   return result;

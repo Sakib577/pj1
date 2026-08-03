@@ -917,7 +917,15 @@ class FinanceAppState extends ChangeNotifier {
   ) {
     target
       ..clear()
-      ..addAll(source);
+      ..addAll(
+        identical(target, _incomeCategories)
+            ? source.map(
+                (category) => category.id == 'other-income'
+                    ? category.copyWith(icon: Icons.card_giftcard_rounded)
+                    : category,
+              )
+            : source,
+      );
     if (identical(target, _expenseCategories)) {
       _normalizeMissingCategory(target);
     }
@@ -1490,7 +1498,7 @@ class FinanceAppState extends ChangeNotifier {
     ExpenseCategory(
       id: 'other-income',
       name: 'Other Income',
-      icon: Icons.category_rounded,
+      icon: Icons.card_giftcard_rounded,
       subcategories: ['Cashback', 'Prize', 'Gift voucher', 'Other'],
     ),
   ];

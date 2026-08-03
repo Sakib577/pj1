@@ -271,8 +271,14 @@ class _CategoryCard extends StatelessWidget {
     return Card(
       elevation: 0,
       color: Colors.white,
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ExpansionTile(
+        shape: const Border(),
+        collapsedShape: const Border(),
+        backgroundColor: Colors.white,
+        collapsedBackgroundColor: Colors.white,
+        clipBehavior: Clip.antiAlias,
         leading: Container(
           width: 44,
           height: 44,
@@ -394,23 +400,29 @@ class _SegmentButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
+    return Material(
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: selected
-                  ? const Color(0xFFF59E0B)
-                  : const Color(0xFF6B7280),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        splashColor: const Color(0x14F59E0B),
+        highlightColor: const Color(0x0AF59E0B),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: selected
+                    ? const Color(0xFFF59E0B)
+                    : const Color(0xFF6B7280),
+              ),
             ),
           ),
         ),

@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -29,35 +29,44 @@ void _setupGlobalErrorHandlers() {
   };
 
   // ---------- Dart unhandled async errors (e.g. futures without catch) ----------
-  runZonedGuarded<Future<void>>(
-    () async {
-      WidgetsFlutterBinding.ensureInitialized();
-      await Firebase.initializeApp( // this boots the firebase
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      // -- Firestore offline persistence MUST be configured BEFORE any other
-      //    Firestore access. If any Firestore call happens first (e.g. inside a
-      //    StatefulWidget field initializer), the default settings lock in and
-      //    this call throws because settings can only be set once. In release
-      //    builds this can silently fail and leave the app with no local cache,
-      //    producing a white screen on first launch after login.
-      await _enableOfflinePersistence();
-      // Restore the display currency and its last known rates before any UI is
-      // built, so an offline launch never renders a selected sign with USD values.
-      await CurrencyPreferences.hydrate();
-      runApp(const MyApp());
-    },
-    (Object error, StackTrace stack) {
-      _lastError = '$error\n\n$stack';
-      // Re-run the app with the error visible (the root widget checks for this).
-      runApp(const MyApp());
-    },
-  );
+  // PlatformDispatcher.onError is used instead of runZonedGuarded so the whole
+  // app stays in the root zone. runZonedGuarded forked a new zone, so a reload
+  // or hot restart that re-ran main() initialized the binding in an old zone
+  // while runApp ran in the new one, triggering the "zone mismatch" warning.
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    _lastError = '$error\n\n$stack';
+    // Re-run the app with the error visible (the root widget checks for this),
+    // matching the previous runZonedGuarded error handler behaviour.
+    runApp(const MyApp());
+    return true;
+  };
 }
 
 // Entry point: Flutter starts running the app from here.
 Future<void> main() async {
+  // Initialize the binding in the root zone so it matches the zone used by
+  // runApp below (also on Reload / hot restart, which re-enter main()).
+  WidgetsFlutterBinding.ensureInitialized();
   _setupGlobalErrorHandlers();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    // -- Firestore offline persistence MUST be configured BEFORE any other
+    //    Firestore access. If any Firestore call happens first (e.g. inside a
+    //    StatefulWidget field initializer), the default settings lock in and
+    //    this call throws because settings can only be set once. In release
+    //    builds this can silently fail and leave the app with no local cache,
+    //    producing a white screen on first launch after login.
+    await _enableOfflinePersistence();
+    // Restore the display currency and its last known rates before any UI is
+    // built, so an offline launch never renders a selected sign with USD values.
+    await CurrencyPreferences.hydrate();
+  } catch (error, stack) {
+    // Startup failed: render the error screen instead of a white page.
+    _lastError = '$error\n\n$stack';
+  }
+  runApp(const MyApp());
 }
 
 // Best-effort: if the platform does not support durable local storage (e.g.

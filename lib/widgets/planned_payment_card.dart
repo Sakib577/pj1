@@ -17,7 +17,7 @@ class PlannedPaymentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final due = payment.nextDue();
+    final due = payment.currentDue();
     final today = _dateOnly(DateTime.now());
     final dueText = switch (due.compareTo(today)) {
       < 0 => 'Overdue',

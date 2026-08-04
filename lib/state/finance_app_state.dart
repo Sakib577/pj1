@@ -156,9 +156,10 @@ class FinanceAppState extends ChangeNotifier {
     _syncReminders();
   }
 
-  // Confirms a planned payment: records it as a real transaction and removes
-  // it from the planned-payments list so the confirmed amount only appears in
-  // transactions, not as an upcoming payment.
+  // Confirms a planned payment: records it as a real transaction. One-time
+  // payments are then removed from the list. Repeating payments stay and are
+  // advanced to their next occurrence (via lastConfirmedDate) so they come due
+  // again on schedule instead of disappearing.
   void confirmPlannedPayment(String id) {
     final index = _plannedPayments.indexWhere((payment) => payment.id == id);
     if (index == -1) return;
@@ -175,12 +176,21 @@ class FinanceAppState extends ChangeNotifier {
       note: payment.title,
     );
 
-    _plannedPayments.removeAt(index);
-    notifyListeners();
-    unawaited(
-      _write((uid) => _financeRepository.deletePlannedPayment(uid, payment.id)),
+    if (payment.repeat == RepeatFrequency.once) {
+      _plannedPayments.removeAt(index);
+      notifyListeners();
+      unawaited(
+        _write(
+          (uid) => _financeRepository.deletePlannedPayment(uid, payment.id),
+        ),
+      );
+      _syncReminders();
+      return;
+    }
+
+    updatePlannedPayment(
+      payment.copyWith(lastConfirmedDate: payment.currentDue()),
     );
-    _syncReminders();
   }
 
   ExpenseCategory _findCategoryForPayment(PlannedPayment payment) {
@@ -512,11 +522,18 @@ class FinanceAppState extends ChangeNotifier {
       final dueDay = DateTime(due.year, due.month, due.day);
       final today = DateTime.now();
       final todayDay = DateTime(today.year, today.month, today.day);
+      // A reminder only exists from the moment the payment was created, so a
+      // payment added today should not claim reminders from previous days.
+      final created = payment.createdAt ?? payment.startDate;
+      final createdDay = DateTime(created.year, created.month, created.day);
       for (final daysBefore in [2, 1, 0]) {
         final reminderDay = dueDay.subtract(Duration(days: daysBefore));
         // Do not show a future due-day reminder as "due today". A one-day
         // reminder for tomorrow is valid and should be visible today.
         if (reminderDay.isAfter(todayDay)) continue;
+        // The payment did not exist before it was created, so a reminder
+        // scheduled earlier than its creation date never happened.
+        if (reminderDay.isBefore(createdDay)) continue;
         final title = daysBefore == 0
             ? 'Payment due today'
             : 'Payment coming up in $daysBefore '

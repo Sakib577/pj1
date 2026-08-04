@@ -996,11 +996,44 @@ class PlannedPayment {
     return date;
   }
 
-  // True when the current occurrence is due today (or is an overdue one-time
-  // payment) and has not been confirmed yet.
+  // The occurrence that is currently due or overdue: the latest occurrence on
+  // or before [from] (today by default) that has not been confirmed yet. This
+  // is what drives "Overdue" / "Due today" labels and confirmation prompts.
+  // Unlike [nextDue] (used for reminders, which always points at the next
+  // future occurrence), this stays on a missed occurrence so a repeating
+  // payment whose date has already passed is reported as overdue instead of
+  // silently rolling forward to the next one.
+  DateTime currentDue({DateTime? from}) {
+    final target = _dateOnly(from ?? DateTime.now());
+    final lastConfirmed = lastConfirmedDate;
+    var date = _dateOnly(startDate);
+    if (lastConfirmed != null) {
+      final confirmed = _dateOnly(lastConfirmed);
+      if (confirmed.isAfter(date)) {
+        date = _advance(confirmed);
+      }
+      if (date.isAtSameMomentAs(confirmed)) {
+        date = _advance(date);
+      }
+    }
+    if (repeat == RepeatFrequency.once) return date;
+    // Bound the loop: a non-positive custom interval would otherwise spin
+    // forever and freeze the UI (white screen) on corrupt data.
+    var guard = 0;
+    while (guard < 10000) {
+      final next = _advance(date);
+      if (next.isAfter(target)) break;
+      date = next;
+      guard++;
+    }
+    return date;
+  }
+
+  // True when the current occurrence is due today or overdue and has not been
+  // confirmed yet.
   bool get needsConfirmation {
     final today = _dateOnly(DateTime.now());
-    final due = nextDue();
+    final due = currentDue();
     if (due.isAfter(today)) return false;
     final lastConfirmed = lastConfirmedDate;
     if (lastConfirmed != null) {
@@ -1011,7 +1044,7 @@ class PlannedPayment {
   }
 
   bool get isOverdue {
-    final due = nextDue();
+    final due = currentDue();
     return _dateOnly(DateTime.now()).isAfter(due);
   }
 

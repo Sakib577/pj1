@@ -14,6 +14,7 @@ import 'package:pj1/pages/profile_page.dart';
 import 'package:pj1/pages/savings_page.dart';
 import 'package:pj1/pages/settings_page.dart';
 import 'package:pj1/pages/shopping_list_page.dart';
+import 'package:pj1/pages/statistics_page.dart';
 import 'package:pj1/pages/transactions_page.dart';
 import 'package:pj1/state/finance_app_state.dart';
 import 'package:pj1/utils/currency_formatters.dart';
@@ -315,6 +316,12 @@ class _DashboardPageState extends State<DashboardPage> {
     ).push(MaterialPageRoute(builder: (_) => const ShoppingListPage()));
   }
 
+  void _openStatistics() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const StatisticsPage()));
+  }
+
   Future<void> _openFromDrawer(VoidCallback action) async {
     Navigator.of(context).pop();
     await Future<void>.delayed(const Duration(milliseconds: 250));
@@ -567,6 +574,9 @@ class _DashboardPageState extends State<DashboardPage> {
         onOpenShoppingList: () {
           _openFromDrawer(_openShoppingList);
         },
+        onOpenStatistics: () {
+          _openFromDrawer(_openStatistics);
+        },
         onOpenTool: (tool) {
           _openFromDrawer(() => _openTool(tool));
         },
@@ -655,6 +665,7 @@ class _AppDrawer extends StatelessWidget {
     required this.onOpenPlannedPayments,
     required this.onOpenDebts,
     required this.onOpenShoppingList,
+    required this.onOpenStatistics,
     required this.onOpenTool,
     required this.onOpenProfile,
   });
@@ -665,6 +676,7 @@ class _AppDrawer extends StatelessWidget {
   final VoidCallback onOpenPlannedPayments;
   final VoidCallback onOpenDebts;
   final VoidCallback onOpenShoppingList;
+  final VoidCallback onOpenStatistics;
   final ValueChanged<FinanceTool> onOpenTool;
   final VoidCallback onOpenProfile;
 
@@ -768,6 +780,12 @@ class _AppDrawer extends StatelessWidget {
               label: 'Shopping List',
               selected: false,
               onTap: onOpenShoppingList,
+            ),
+            _DrawerNavigationItem(
+              icon: Icons.analytics_outlined,
+              label: 'Statistics',
+              selected: false,
+              onTap: onOpenStatistics,
             ),
             _DrawerNavigationItem(
               icon: Icons.pie_chart_outline_rounded,

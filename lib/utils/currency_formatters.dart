@@ -25,8 +25,22 @@ String formatCurrency(double value) {
 }
 
 String formatCurrencyNoCents(double value) {
-  // Reuse the full formatter; it already omits zero decimals.
-  return formatCurrency(value);
+  final rounded = value.roundToDouble();
+  final displayedValue = CurrencySettings.fromUsd(rounded);
+  final isNegative = displayedValue < 0;
+  final absoluteValue = displayedValue.abs();
+  // Build comma-separated thousands manually so no extra intl package is needed.
+  final digits = absoluteValue.toStringAsFixed(0);
+  final reversed = digits.split('').reversed.toList();
+  final buffer = StringBuffer();
+
+  for (int i = 0; i < reversed.length; i++) {
+    if (i != 0 && i % 3 == 0) buffer.write(',');
+    buffer.write(reversed[i]);
+  }
+
+  final formattedWhole = buffer.toString().split('').reversed.join();
+  return '${isNegative ? '-' : ''}${CurrencySettings.symbol}$formattedWhole';
 }
 
 String formatCurrencyInput(double value) {

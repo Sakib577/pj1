@@ -57,6 +57,35 @@ class AppLockService {
 
   static String _pinKey(String uid) => 'app_lock.pin.$uid';
 
+  static String _lockTypeKey(String uid) => 'app_lock.type.$uid';
+
+  /// The lock method is stored **on-device only** (keyed by user), never on the
+  /// server. That way a fresh sign-in, a new device, or a reinstall always
+  /// starts with [LockType.none] and the lock only applies after the user sets
+  /// it again from the privacy settings.
+  Future<LockType> loadLockType(String uid) async {
+    if (uid.isEmpty) return LockType.none;
+    final preferences = await SharedPreferences.getInstance();
+    final stored = preferences.getString(_lockTypeKey(uid));
+    if (stored == null || stored.isEmpty) return LockType.none;
+    return LockType.values.firstWhere(
+      (type) => type.name == stored,
+      orElse: () => LockType.none,
+    );
+  }
+
+  Future<void> saveLockType(String uid, LockType type) async {
+    if (uid.isEmpty) return;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_lockTypeKey(uid), type.name);
+  }
+
+  Future<void> clearLockType(String uid) async {
+    if (uid.isEmpty) return;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_lockTypeKey(uid));
+  }
+
   Future<bool> hasPin(String uid) async {
     if (uid.isEmpty) return false;
     final preferences = await SharedPreferences.getInstance();

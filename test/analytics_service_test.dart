@@ -84,7 +84,10 @@ void main() {
   group('calculateCashFlow', () {
     test('computes income/expense/net and previous deltas', () {
       final now = DateTime(2026, 8, 5);
-      final w = buildWindowFromDateRange(now: now);
+      final w = buildWindowFromDateRange(
+        now: now,
+        range: const DateRange.preset(DateRangePreset.last30),
+      );
       final rows = [
         txn(amount: 100, date: now),
         txn(amount: 40, date: now),

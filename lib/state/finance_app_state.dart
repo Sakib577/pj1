@@ -14,6 +14,18 @@ import '../utils/currency_settings.dart';
 import '../utils/currency_formatters.dart';
 
 class FinanceAppState extends ChangeNotifier {
+  FinanceAppState() {
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+      // A sign-out with data still loaded must clear local state and reset the
+      // app lock so the next sign-in starts with security defaulted to "none".
+      if (user == null && _syncedUid != null) {
+        unawaited(syncUserData());
+      }
+    });
+  }
+
+  StreamSubscription<User?>? _authSubscription;
+
   double _balance = 0;
   double _income = 0;
   double _expenses = 0;
@@ -71,6 +83,7 @@ class FinanceAppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _stopSync();
     super.dispose();
   }
@@ -731,10 +744,18 @@ class FinanceAppState extends ChangeNotifier {
   Future<void> syncUserData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
+      final previousUid = _syncedUid;
       _stopSync();
       _clearFinanceData();
       _categorySyncReady = true;
       notifyListeners();
+      // Reset the app lock on sign-out: clear the on-device PIN hash and the
+      // locally stored lock preference, so a fresh sign-in is not asked for
+      // biometrics or a PIN and the security setting defaults back to "none".
+      if (previousUid != null && previousUid.isNotEmpty) {
+        await AppLockService.instance.clearPin(previousUid);
+        unawaited(AppLockService.instance.clearLockType(previousUid));
+      }
       return;
     }
 
@@ -908,18 +929,10 @@ class FinanceAppState extends ChangeNotifier {
           preferences['paymentNotificationsEnabled'] as bool? ?? true;
       _budgetNotificationsEnabled =
           preferences['budgetNotificationsEnabled'] as bool? ?? true;
-      final storedLockType = preferences['lockType'] as String?;
-      if (storedLockType != null) {
-        _lockType = LockType.values.firstWhere(
-          (type) => type.name == storedLockType,
-          orElse: () => LockType.none,
-        );
-      } else {
-        // Migrate the legacy boolean preference.
-        _lockType = (preferences['biometricLockEnabled'] as bool? ?? false)
-            ? LockType.biometric
-            : LockType.none;
-      }
+      // The app lock is device-local and session-scoped: restore it only from
+      // this device's local storage, so a fresh sign-in, new device, or
+      // reinstall starts unlocked. It never comes from the server.
+      _lockType = await AppLockService.instance.loadLockType(uid);
       // The PIN hash lives only on this device, keyed by user. If the stored
       // preference says PIN but no hash exists locally (e.g. after a fresh
       // install, or on an account that never set one on this phone), there is
@@ -1150,7 +1163,7 @@ class FinanceAppState extends ChangeNotifier {
   // that category first in the list.
   void _normalizeMissingCategory(List<ExpenseCategory> categories) {
     for (var i = 0; i < categories.length; i++) {
-      if (categories[i].name.trim() == 'Missing/Uncategorized') {
+      if (categories[i].name.trim().toLowerCase() == 'missing/uncategorized') {
         categories[i] = categories[i].copyWith(name: 'Missing');
       }
     }
@@ -1234,13 +1247,9 @@ class FinanceAppState extends ChangeNotifier {
     }
     _lockType = type;
     notifyListeners();
-    unawaited(
-      _write(
-        (uid) => _financeRepository.savePreferences(uid, {
-          'lockType': type.name,
-        }),
-      ),
-    );
+    // Stored on-device only (never on the server), so a fresh sign-in always
+    // starts with the lock defaulted to "none".
+    unawaited(AppLockService.instance.saveLockType(uid, type));
     return true;
   }
 

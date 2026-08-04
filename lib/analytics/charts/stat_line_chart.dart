@@ -101,19 +101,28 @@ class StatLineChart extends StatelessWidget {
       for (final s in series)
         for (final p in s) p.y,
     ];
-    final computedMinY = minY ?? (allY.isEmpty ? 0 : allY.reduce((a, b) => a < b ? a : b));
-    final computedMaxY = maxY ?? (allY.isEmpty ? 1 : allY.reduce((a, b) => a > b ? a : b));
+    final allPositive = allY.isNotEmpty && allY.every((v) => v >= 0);
+    final computedMinY = minY ??
+        (allY.isEmpty ? 0 : allY.reduce((a, b) => a < b ? a : b));
+    final computedMaxY = maxY ??
+        (allY.isEmpty ? 1 : allY.reduce((a, b) => a > b ? a : b));
     final yRange = ((computedMaxY - computedMinY == 0)
         ? 1
         : (computedMaxY - computedMinY)) *
         0.3;
 
+    // Keep the axis proportional to the actual data: all-positive series start
+    // at 0 so low-spend periods aren't drowned out by a huge negative domain.
+    final explicitMin = minY;
+    final effectiveMinY = explicitMin ?? (allPositive ? 0.0 : computedMinY - yRange);
+    final effectiveMaxY = computedMaxY + yRange;
+
     return SizedBox(
       height: height,
       child: LineChart(
         LineChartData(
-          minY: computedMinY - yRange,
-          maxY: computedMaxY + yRange,
+          minY: effectiveMinY,
+          maxY: effectiveMaxY,
           gridData: FlGridData(
             show: true,
             drawVerticalLine: false,

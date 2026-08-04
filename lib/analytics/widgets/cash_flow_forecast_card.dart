@@ -27,6 +27,10 @@ class CashFlowForecastCard extends StatelessWidget {
     final maxY = points.isEmpty
         ? 1.0
         : points.map((p) => p.value.abs()).fold<double>(0, (m, v) => v > m ? v : m);
+    final minValue = points.isEmpty
+        ? 0.0
+        : points.map((p) => p.value).fold<double>(0, (m, v) => v < m ? v : m);
+    final hasNegative = minValue < 0;
 
     return StatCard(
       title: 'Cash Flow Forecast',
@@ -60,7 +64,7 @@ class CashFlowForecastCard extends StatelessWidget {
                   tooltipBuilder: (point, index) =>
                       '${index == 1 ? 'Fcst ' : ''}${formatCurrencyNoCents(point.y)}',
                   maxY: maxY * 1.2,
-                  minY: -maxY * 1.2,
+                  minY: hasNegative ? -maxY * 1.2 : null,
                   height: 160,
                 ),
                 const SizedBox(height: 8),

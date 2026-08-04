@@ -792,7 +792,8 @@ class AnalyticsService {
         ),
       );
     }
-    // Anchor with the last actual date.
+    // Anchor with the last actual date, using the same daily-net scale as the
+    // forecast points so the Y axis stays proportional to the recent spend.
     final actualAnchor = inWindow.isEmpty
         ? window.start
         : (inWindow.map((t) => t.createdAt!).toList()
@@ -802,7 +803,7 @@ class AnalyticsService {
       0,
       ForecastPoint(
         x: actualAnchor,
-        value: rows.fold<double>(0, (s, t) => s + (t.negative ? -t.amount : t.amount)),
+        value: avgDaily,
         forecast: false,
       ),
     );

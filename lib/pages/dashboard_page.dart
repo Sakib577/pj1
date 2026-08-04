@@ -11,6 +11,7 @@ import 'package:pj1/pages/finance_tools_page.dart';
 import 'package:pj1/pages/notification_history_page.dart';
 import 'package:pj1/pages/planned_payments_page.dart';
 import 'package:pj1/pages/profile_page.dart';
+import 'package:pj1/reports/reports_page.dart';
 import 'package:pj1/pages/savings_page.dart';
 import 'package:pj1/pages/settings_page.dart';
 import 'package:pj1/pages/shopping_list_page.dart';
@@ -322,6 +323,12 @@ class _DashboardPageState extends State<DashboardPage> {
     ).push(MaterialPageRoute(builder: (_) => const StatisticsPage()));
   }
 
+  void _openReports() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ReportsPage()));
+  }
+
   Future<void> _openFromDrawer(VoidCallback action) async {
     Navigator.of(context).pop();
     await Future<void>.delayed(const Duration(milliseconds: 250));
@@ -577,6 +584,9 @@ class _DashboardPageState extends State<DashboardPage> {
         onOpenStatistics: () {
           _openFromDrawer(_openStatistics);
         },
+        onOpenReports: () {
+          _openFromDrawer(_openReports);
+        },
         onOpenTool: (tool) {
           _openFromDrawer(() => _openTool(tool));
         },
@@ -666,6 +676,7 @@ class _AppDrawer extends StatelessWidget {
     required this.onOpenDebts,
     required this.onOpenShoppingList,
     required this.onOpenStatistics,
+    required this.onOpenReports,
     required this.onOpenTool,
     required this.onOpenProfile,
   });
@@ -677,6 +688,7 @@ class _AppDrawer extends StatelessWidget {
   final VoidCallback onOpenDebts;
   final VoidCallback onOpenShoppingList;
   final VoidCallback onOpenStatistics;
+  final VoidCallback onOpenReports;
   final ValueChanged<FinanceTool> onOpenTool;
   final VoidCallback onOpenProfile;
 
@@ -786,6 +798,12 @@ class _AppDrawer extends StatelessWidget {
               label: 'Statistics',
               selected: false,
               onTap: onOpenStatistics,
+            ),
+            _DrawerNavigationItem(
+              icon: Icons.description_outlined,
+              label: 'Reports',
+              selected: false,
+              onTap: onOpenReports,
             ),
             _DrawerNavigationItem(
               icon: Icons.pie_chart_outline_rounded,

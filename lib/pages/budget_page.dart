@@ -58,64 +58,87 @@ class BudgetPage extends StatelessWidget {
     final limit = TextEditingController();
     var period = 'monthly';
     final customDays = TextEditingController(text: '30');
+    final categories = FinanceAppScope.of(context).expenseCategories;
+    var selectedCategory = '';
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Create budget'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                decoration: const InputDecoration(labelText: 'Budget name'),
-              ),
-              TextField(
-                controller: limit,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(labelText: 'Monthly limit'),
-              ),
-              DropdownButtonFormField<String>(
-                initialValue: period,
-                items: const [
-                  DropdownMenuItem(
-                    value: 'monthly',
-                    child: Text('Calendar month'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'thirtyDays',
-                    child: Text('Every 30 days'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'custom',
-                    child: Text('Custom repeat'),
-                  ),
-                ],
-                onChanged: (value) => setDialogState(() => period = value!),
-              ),
-              if (period == 'custom')
+        builder: (dialogContext, setDialogState) {
+          final amount = double.tryParse(limit.text.trim()) ?? 0;
+          final canSave = name.text.trim().isNotEmpty && amount > 0;
+          return AlertDialog(
+            title: const Text('Create budget'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 TextField(
-                  controller: customDays,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Repeat every days',
-                  ),
+                  controller: name,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(labelText: 'Budget name'),
                 ),
+                TextField(
+                  controller: limit,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(labelText: 'Monthly limit'),
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedCategory,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: [
+                    for (final item in _categoryOptions(categories))
+                      DropdownMenuItem(
+                        value: item,
+                        child: Text(_categoryLabel(item)),
+                      ),
+                  ],
+                  onChanged: (value) =>
+                      setDialogState(() => selectedCategory = value!),
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: period,
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'monthly',
+                      child: Text('Calendar month'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'thirtyDays',
+                      child: Text('Every 30 days'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'custom',
+                      child: Text('Custom repeat'),
+                    ),
+                  ],
+                  onChanged: (value) => setDialogState(() => period = value!),
+                ),
+                if (period == 'custom')
+                  TextField(
+                    controller: customDays,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Repeat every days',
+                    ),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: canSave
+                    ? () => Navigator.pop(dialogContext, true)
+                    : null,
+                child: const Text('Save'),
+              ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
     await Future<void>.delayed(const Duration(milliseconds: 300));
@@ -129,6 +152,7 @@ class BudgetPage extends StatelessWidget {
         amount,
         period: period,
         customDays: (int.tryParse(customDays.text) ?? 30).clamp(1, 36500),
+        category: _categoryFromSelection(selectedCategory),
       );
     }
     name.dispose();
@@ -171,36 +195,65 @@ class BudgetPage extends StatelessWidget {
       final limit = TextEditingController(
         text: CurrencySettings.fromUsd(item.limit).toStringAsFixed(2),
       );
+      final categories = FinanceAppScope.of(context).expenseCategories;
+      var selectedCategory = item.category ?? '';
       final saved = await showDialog<bool>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Edit budget'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                decoration: const InputDecoration(labelText: 'Budget name'),
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            final amount = double.tryParse(limit.text.trim()) ?? 0;
+            final canSave = name.text.trim().isNotEmpty && amount > 0;
+            return AlertDialog(
+              title: const Text('Edit budget'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: name,
+                    onChanged: (_) => setDialogState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Budget name',
+                    ),
+                  ),
+                  TextField(
+                    controller: limit,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Monthly limit',
+                    ),
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedCategory,
+                    decoration: const InputDecoration(labelText: 'Category'),
+                    items: [
+                      for (final option in _categoryOptions(categories))
+                        DropdownMenuItem(
+                          value: option,
+                          child: Text(_categoryLabel(option)),
+                        ),
+                    ],
+                    onChanged: (value) =>
+                        setDialogState(() => selectedCategory = value!),
+                  ),
+                ],
               ),
-              TextField(
-                controller: limit,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
                 ),
-                decoration: const InputDecoration(labelText: 'Monthly limit'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Save'),
-            ),
-          ],
+                FilledButton(
+                  onPressed: canSave
+                      ? () => Navigator.pop(dialogContext, true)
+                      : null,
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
         ),
       );
       await Future<void>.delayed(const Duration(milliseconds: 300));
@@ -213,6 +266,8 @@ class BudgetPage extends StatelessWidget {
           item.copyWith(
             label: name.text.trim(),
             limit: CurrencySettings.toUsd(amount),
+            category: _categoryFromSelection(selectedCategory),
+            clearCategory: false,
           ),
         );
       }
@@ -224,6 +279,17 @@ class BudgetPage extends StatelessWidget {
       FinanceAppScope.of(context).deleteBudget(item.id);
     }
   }
+
+  // Dropdown options for the budget category picker. An empty string is the
+  // sentinel for "All categories" (the default) and is stored as null.
+  List<String> _categoryOptions(List<ExpenseCategory> categories) =>
+      ['', ...categories.map((c) => c.name)];
+
+  String _categoryLabel(String option) =>
+      option.isEmpty ? 'All categories' : option;
+
+  String? _categoryFromSelection(String selection) =>
+      selection.isEmpty ? null : selection;
 }
 
 Future<void> showCreateBudgetDialog(BuildContext context) async {
@@ -465,7 +531,9 @@ class _BudgetCategoryCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${item.daysLeft} days left',
+                        item.category == null
+                            ? '${item.daysLeft} days left'
+                            : '${item.category} · ${item.daysLeft} days left',
                         style: const TextStyle(
                           color: Color(0xFF6B7280),
                           fontSize: 13,

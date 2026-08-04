@@ -1041,7 +1041,9 @@ class PlannedPayment {
       DateTime(date.year, date.month, date.day);
 }
 
-// Budget item for a single spending category.
+// Budget item for a single spending category. When [category] is null the
+// budget tracks every expense (all categories); otherwise only expenses in that
+// expense category count toward it.
 class BudgetCategory {
   const BudgetCategory({
     required this.id,
@@ -1056,6 +1058,7 @@ class BudgetCategory {
     this.period = 'monthly',
     required this.startDate,
     this.customDays = 30,
+    this.category,
   });
 
   final String id;
@@ -1070,6 +1073,9 @@ class BudgetCategory {
   final String period;
   final DateTime startDate;
   final int customDays;
+  // Name of the expense category this budget tracks, or null for all
+  // categories (the default).
+  final String? category;
 
   BudgetCategory copyWith({
     double? spent,
@@ -1078,6 +1084,8 @@ class BudgetCategory {
     String? period,
     int? customDays,
     DateTime? startDate,
+    String? category,
+    bool clearCategory = false,
   }) => BudgetCategory(
     id: id,
     label: label ?? this.label,
@@ -1091,6 +1099,7 @@ class BudgetCategory {
     period: period ?? this.period,
     startDate: startDate ?? this.startDate,
     customDays: customDays ?? this.customDays,
+    category: clearCategory ? null : category ?? this.category,
   );
 
   Map<String, dynamic> toMap() => {
@@ -1099,6 +1108,7 @@ class BudgetCategory {
     'period': period,
     'startDate': startDate.millisecondsSinceEpoch,
     'customDays': customDays,
+    'category': category,
   };
   factory BudgetCategory.fromMap(String id, Map<String, dynamic> data) =>
       BudgetCategory(
@@ -1119,6 +1129,7 @@ class BudgetCategory {
         customDays: ((data['customDays'] as num?)?.toInt() ?? 30)
             .clamp(1, 36500)
             .toInt(),
+        category: (data['category'] as String?)?.trim(),
       );
 }
 

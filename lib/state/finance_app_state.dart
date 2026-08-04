@@ -480,12 +480,7 @@ class FinanceAppState extends ChangeNotifier {
             (transaction) =>
                 transaction.negative &&
                 _isInBudgetPeriod(transaction.createdAt, budget) &&
-                // A calendar-month budget is the user's overall monthly
-                // spending limit, so it includes every expense from the 1st
-                // through the final day of this month. Repeating budgets keep
-                // their category-specific behavior.
-                (budget.period == 'monthly' ||
-                    transaction.categoryName == budget.label),
+                _matchesBudgetCategory(transaction.categoryName, budget),
           )
           .fold<double>(0, (total, transaction) => total + transaction.amount);
       return budget.copyWith(spent: spent);
@@ -565,12 +560,30 @@ class FinanceAppState extends ChangeNotifier {
         date.isBefore(start.add(Duration(days: days)));
   }
 
+  // Whether a transaction's category counts toward a budget. A budget with an
+  // explicit category only counts expenses from that category (a transaction
+  // stores either the bare category name or "Category · Subcategory").
+  // A budget without a category counts every expense, except for legacy
+  // repeating budgets created before category tracking existed, whose label
+  // was used as the category name.
+  bool _matchesBudgetCategory(String transactionCategory, BudgetCategory budget) {
+    final category = budget.category;
+    if (category != null) {
+      return transactionCategory == category ||
+          transactionCategory.startsWith('$category · ');
+    }
+    if (budget.period == 'monthly') return true;
+    return transactionCategory == budget.label;
+  }
+
   void addBudget(
     String label,
     double limit, {
     String period = 'monthly',
     int customDays = 30,
+    String? category,
   }) {
+    if (label.trim().isEmpty || limit <= 0) return;
     if (customDays < 1) customDays = 1;
     final item = BudgetCategory(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -585,6 +598,7 @@ class FinanceAppState extends ChangeNotifier {
       period: period,
       customDays: customDays,
       startDate: DateTime.now(),
+      category: category,
     );
     _budgets.add(item);
     notifyListeners();
@@ -600,6 +614,7 @@ class FinanceAppState extends ChangeNotifier {
   void updateBudget(BudgetCategory item) {
     final index = _budgets.indexWhere((budget) => budget.id == item.id);
     if (index == -1) return;
+    if (item.label.trim().isEmpty || item.limit <= 0) return;
     _budgets[index] = item;
     notifyListeners();
     unawaited(_write((uid) => _financeRepository.saveBudget(uid, item)));

@@ -32,7 +32,7 @@ void _setupGlobalErrorHandlers() {
   runZonedGuarded<Future<void>>(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
-      await Firebase.initializeApp(
+      await Firebase.initializeApp( // this boots the firebase
         options: DefaultFirebaseOptions.currentPlatform,
       );
       // -- Firestore offline persistence MUST be configured BEFORE any other

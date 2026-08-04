@@ -68,7 +68,7 @@ class BudgetPage extends StatelessWidget {
             children: [
               TextField(
                 controller: name,
-                decoration: const InputDecoration(labelText: 'Category name'),
+                decoration: const InputDecoration(labelText: 'Budget name'),
               ),
               TextField(
                 controller: limit,
@@ -180,7 +180,7 @@ class BudgetPage extends StatelessWidget {
             children: [
               TextField(
                 controller: name,
-                decoration: const InputDecoration(labelText: 'Category name'),
+                decoration: const InputDecoration(labelText: 'Budget name'),
               ),
               TextField(
                 controller: limit,
@@ -475,10 +475,24 @@ class _BudgetCategoryCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 24),
-                Text(
-                  '${formatCurrency(item.spent)} / ${formatCurrency(item.limit)}',
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${formatCurrency(item.spent)} /',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    Text(
+                      'Budget: ${formatCurrency(item.limit)}',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

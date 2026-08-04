@@ -479,14 +479,29 @@ class _SavingsGoalCard extends StatelessWidget {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerRight,
-                    child: Text(
-                      '${formatCurrencyNoCents(goal.current)} / ${formatCurrencyNoCents(goal.target)}',
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF334155),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${formatCurrencyNoCents(goal.current)} /',
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                        Text(
+                          'Target: ${formatCurrencyNoCents(goal.target)}',
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

@@ -17,6 +17,73 @@ class _DebtsPageState extends State<DebtsPage> {
   // 0 = Active, 1 = Closed
   int _statusIndex = 0;
 
+  Future<void> _showRepayDialog(DebtItem debt) async {
+    final amount = TextEditingController();
+    final isBorrowed = debt.type == DebtType.borrowed;
+    final maxText = CurrencySettings.fromUsd(debt.remaining).toStringAsFixed(2);
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Repay ${debt.person}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isBorrowed
+                  ? 'I paid ${debt.person} toward what I owed.'
+                  : '${debt.person} paid me back partly.',
+              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amount,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Repayment amount',
+                hintText: '0',
+                prefixText: '${CurrencySettings.symbol} ',
+                helperText: 'Owed: $maxText',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Pay'),
+          ),
+        ],
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final value = double.tryParse(amount.text.trim()) ?? 0;
+    if (saved == true && value > 0 && mounted) {
+      FinanceAppScope.of(context).repayDebt(
+        debt.id,
+        CurrencySettings.toUsd(value),
+      );
+      if (value > CurrencySettings.fromUsd(debt.remaining)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'You overpaid by '
+              '${formatCurrency(CurrencySettings.toUsd(value - CurrencySettings.fromUsd(debt.remaining)))}. '
+              'The debt flipped to ${debt.type == DebtType.borrowed ? 'lent' : 'borrowed'}.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+    amount.dispose();
+  }
+
   Future<void> _confirmDelete(DebtItem debt) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -54,9 +121,9 @@ class _DebtsPageState extends State<DebtsPage> {
     final lent = all.where((debt) => debt.type == DebtType.lent).toList();
     final borrowedTotal = borrowed.fold<double>(
       0,
-      (sum, debt) => sum + debt.amount,
+      (sum, debt) => sum + debt.remaining,
     );
-    final lentTotal = lent.fold<double>(0, (sum, debt) => sum + debt.amount);
+    final lentTotal = lent.fold<double>(0, (sum, debt) => sum + debt.remaining);
 
     return Column(
       children: [
@@ -129,6 +196,7 @@ class _DebtsPageState extends State<DebtsPage> {
                         _DebtCard(
                           debt: debt,
                           onDelete: () => _confirmDelete(debt),
+                          onRepay: () => _showRepayDialog(debt),
                         ),
                         const SizedBox(height: 12),
                       ],
@@ -142,6 +210,7 @@ class _DebtsPageState extends State<DebtsPage> {
                         _DebtCard(
                           debt: debt,
                           onDelete: () => _confirmDelete(debt),
+                          onRepay: () => _showRepayDialog(debt),
                         ),
                         const SizedBox(height: 12),
                       ],
@@ -470,10 +539,15 @@ class _AddDebtPageState extends State<AddDebtPage> {
 }
 
 class _DebtCard extends StatelessWidget {
-  const _DebtCard({required this.debt, required this.onDelete});
+  const _DebtCard({
+    required this.debt,
+    required this.onDelete,
+    required this.onRepay,
+  });
 
   final DebtItem debt;
   final VoidCallback onDelete;
+  final VoidCallback onRepay;
 
   @override
   Widget build(BuildContext context) {
@@ -535,12 +609,27 @@ class _DebtCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                '${isBorrowed ? '-' : '+'}${formatCurrency(debt.amount)}',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: color,
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${isBorrowed ? '-' : '+'}${formatCurrency(debt.remaining)}',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: color,
+                      ),
+                    ),
+                    if (debt.hasPartialRepayment)
+                      Text(
+                        'of ${formatCurrency(debt.amount)}',
+                        style: const TextStyle(
+                          color: Color(0xFF9CA3AF),
+                          fontSize: 11,
+                        ),
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(width: 4),
@@ -561,17 +650,17 @@ class _DebtCard extends StatelessWidget {
             children: [
               if (debt.settlement == DebtSettlement.active) ...[
                 _DebtActionButton(
+                  label: 'Repay',
+                  filled: false,
+                  color: const Color(0xFF22C55E),
+                  onPressed: onRepay,
+                ),
+                const SizedBox(width: 8),
+                _DebtActionButton(
                   label: isBorrowed ? 'Close' : 'Forgive',
                   filled: true,
                   color: const Color(0xFFF59E0B),
                   onPressed: () => state.setDebtClosed(debt.id, true),
-                ),
-                const SizedBox(width: 8),
-                _DebtActionButton(
-                  label: 'Repaid',
-                  filled: false,
-                  color: const Color(0xFF22C55E),
-                  onPressed: () => state.markDebtRepaid(debt.id),
                 ),
               ] else ...[
                 Text(

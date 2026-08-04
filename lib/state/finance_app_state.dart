@@ -213,6 +213,8 @@ class FinanceAppState extends ChangeNotifier {
       note: debt.note,
       createdAt: debt.createdAt,
       creationTransactionId: transactionId,
+      // Pin the original direction so overpay flips can be reverted.
+      createdType: debt.createdType ?? debt.type,
     );
     _debts.insert(0, debt);
     notifyListeners();
@@ -227,44 +229,112 @@ class FinanceAppState extends ChangeNotifier {
       // Closing/forgiving settles the record without moving money.
       _debts[index] = debt.copyWith(settlement: DebtSettlement.closed);
     } else {
-      _debts[index] = debt.copyWith(settlement: DebtSettlement.active);
-      if (debt.settlement == DebtSettlement.repaid) {
-        _deleteLinkedTransaction(debt.repaymentTransactionId);
-        _debts[index] = _debts[index].copyWith(
-          clearRepaymentTransactionId: true,
-        );
+      // Reopening a repaid/closed record restores the full outstanding amount
+      // and removes all recorded repayments (and their transactions).
+      for (final entry in debt.repaymentLog) {
+        _deleteLinkedTransaction(entry.transactionId);
       }
+      _debts[index] = debt.copyWith(
+        settlement: DebtSettlement.active,
+        repaymentLog: const [],
+        clearRepaymentTransactionId: true,
+        clearRemainingAmount: true,
+      );
     }
     notifyListeners();
     unawaited(_write((uid) => _financeRepository.saveDebt(uid, _debts[index])));
   }
 
-  void markDebtRepaid(String id) {
+  // Applies a repayment of `amountUsd` to an active debt. A repayment that does
+  // not cover the full balance reduces the amount still owed. A repayment that
+  // exceeds the balance flips the debt's direction (borrowed <-> lent) and the
+  // surplus becomes the new outstanding balance owed the other way. Every
+  // repayment is recorded so deleting its transaction reverts the debt.
+  void repayDebt(String id, double amountUsd) {
     final index = _debts.indexWhere((debt) => debt.id == id);
     if (index == -1) return;
     final debt = _debts[index];
     if (debt.settlement != DebtSettlement.active) return;
-    final repaymentTransactionId = _recordDebtTransaction(
+    final payment = amountUsd.abs();
+    if (payment <= 0) return;
+
+    final remaining = debt.remaining;
+    final surplus = payment - remaining;
+    final txnId = _recordDebtTransaction(
       debt,
       repayment: true,
+      amount: payment,
     );
-    _debts[index] = debt.copyWith(
-      settlement: DebtSettlement.repaid,
-      repaymentTransactionId: repaymentTransactionId,
+    final paidOff = surplus == 0;
+    final next = debt.copyWith(
+      type: surplus > 0
+          ? (debt.type == DebtType.borrowed
+              ? DebtType.lent
+              : DebtType.borrowed)
+          : debt.type,
+      settlement: paidOff ? DebtSettlement.repaid : DebtSettlement.active,
+      remainingAmount: paidOff ? 0 : surplus.abs(),
+      repaymentLog: [
+        ...debt.repaymentLog,
+        DebtRepayment(transactionId: txnId, amount: payment),
+      ],
     );
+    _debts[index] = next;
     notifyListeners();
-    unawaited(_write((uid) => _financeRepository.saveDebt(uid, _debts[index])));
+    unawaited(_write((uid) => _financeRepository.saveDebt(uid, next)));
+  }
+
+  // Derives a debt's original direction and principal from its creation
+  // transaction. This is the authoritative source, so reversion also works for
+  // legacy records saved before direction history was tracked.
+  (DebtType, double) _originOf(DebtItem debt) {
+    final index = _transactions.indexWhere(
+      (txn) => txn.id == debt.creationTransactionId,
+    );
+    if (index != -1) {
+      final txn = _transactions[index];
+      final type = txn.negative ? DebtType.lent : DebtType.borrowed;
+      return (type, txn.amount);
+    }
+    return (debt.originType, debt.amount);
+  }
+
+  // Replays a debt's repayment history from its original creation to derive
+  // its current direction and outstanding balance.
+  (double, DebtType) _replayDebt(DebtItem debt) {
+    final (originType, originAmount) = _originOf(debt);
+    var type = originType;
+    var remaining = originAmount;
+    for (final entry in debt.repaymentLog) {
+      if (entry.amount < remaining) {
+        remaining -= entry.amount;
+      } else if (entry.amount == remaining) {
+        remaining = 0;
+      } else {
+        remaining = entry.amount - remaining;
+        type = type == DebtType.borrowed ? DebtType.lent : DebtType.borrowed;
+      }
+    }
+    return (remaining, type);
   }
 
   void deleteDebt(String id) {
     final index = _debts.indexWhere((debt) => debt.id == id);
     if (index == -1) return;
+    _removeFullDebt(index);
+  }
+
+  // Removes a debt along with its creation transaction and every repayment
+  // transaction from the transaction history.
+  void _removeFullDebt(int index) {
     final debt = _debts[index];
     _debts.removeAt(index);
     _deleteLinkedTransaction(debt.creationTransactionId);
-    _deleteLinkedTransaction(debt.repaymentTransactionId);
+    for (final entry in debt.repaymentLog) {
+      _deleteLinkedTransaction(entry.transactionId);
+    }
     notifyListeners();
-    unawaited(_write((uid) => _financeRepository.deleteDebt(uid, id)));
+    unawaited(_write((uid) => _financeRepository.deleteDebt(uid, debt.id)));
   }
 
   // Re-schedules Android reminders to match the current planned payments.
@@ -286,8 +356,13 @@ class FinanceAppState extends ChangeNotifier {
     } catch (_) {}
   }
 
-  String _recordDebtTransaction(DebtItem debt, {required bool repayment}) {
+  String _recordDebtTransaction(
+    DebtItem debt, {
+    required bool repayment,
+    double? amount,
+  }) {
     final now = DateTime.now();
+    final paymentAmount = amount ?? debt.amount;
     final id =
         'debt-${debt.id}-${repayment ? 'repaid' : 'created'}-${now.microsecondsSinceEpoch}';
     final isIncome = repayment
@@ -301,7 +376,7 @@ class FinanceAppState extends ChangeNotifier {
           ? 'Borrowed from ${debt.person}'
           : 'Lent to ${debt.person}',
       subtitle: _buildSubtitle(now, debt.note),
-      amount: debt.amount,
+      amount: paymentAmount,
       icon: repayment
           ? Icons.currency_exchange_rounded
           : Icons.handshake_rounded,
@@ -1327,6 +1402,53 @@ class FinanceAppState extends ChangeNotifier {
   void deleteTransaction(String id) {
     final index = _transactions.indexWhere((txn) => txn.id == id);
     if (index == -1) return;
+
+    if (id.startsWith('debt-')) {
+      // Deleting a debt's creation transaction removes the whole debt record.
+      final creationIndex = _debts.indexWhere(
+        (debt) => debt.creationTransactionId == id,
+      );
+      if (creationIndex != -1) {
+        _transactions.removeAt(index);
+        _removeFullDebt(creationIndex);
+        return;
+      }
+
+      // Deleting a repayment transaction reverts the debt to the value it had
+      // before that payment (replaying its repayment history without it).
+      final repayIndex = _debts.indexWhere(
+        (debt) => debt.repaymentLog.any((entry) => entry.transactionId == id),
+      );
+      if (repayIndex != -1) {
+        final debt = _debts[repayIndex];
+        final restored = debt.copyWith(
+          repaymentLog: debt.repaymentLog
+              .where((entry) => entry.transactionId != id)
+              .toList(),
+        );
+        final (remaining, type) = _replayDebt(restored);
+        final (originType, _) = _originOf(restored);
+        _transactions.removeAt(index);
+        _recomputeTotals();
+        _debts[repayIndex] = restored.copyWith(
+          type: type,
+          remainingAmount: remaining,
+          createdType: originType,
+          settlement: remaining == 0
+              ? DebtSettlement.repaid
+              : DebtSettlement.active,
+        );
+        notifyListeners();
+        unawaited(
+          _write(
+            (uid) => _financeRepository.saveDebt(uid, _debts[repayIndex]),
+          ),
+        );
+        unawaited(_write((uid) => _financeRepository.deleteTransaction(uid, id)));
+        return;
+      }
+    }
+
     _transactions.removeAt(index);
     _recomputeTotals();
     notifyListeners();

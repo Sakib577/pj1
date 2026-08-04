@@ -644,6 +644,29 @@ extension DebtTypeLabel on DebtType {
 // closed (or forgiven for lent debts) settles the record without moving money.
 enum DebtSettlement { active, closed, repaid }
 
+// One recorded repayment against a debt. Kept so deleting a linked repayment
+// transaction can replay the history and revert the debt to its prior value.
+class DebtRepayment {
+  const DebtRepayment({required this.transactionId, required this.amount});
+
+  final String transactionId;
+  final double amount;
+
+  Map<String, dynamic> toMap() {
+    return {
+      'transactionId': transactionId,
+      'amount': amount,
+    };
+  }
+
+  factory DebtRepayment.fromMap(Map<String, dynamic> data) {
+    return DebtRepayment(
+      transactionId: (data['transactionId'] as String?) ?? '',
+      amount: (data['amount'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
 // One debt (borrowed or lent) with a settlement state.
 class DebtItem {
   const DebtItem({
@@ -655,37 +678,70 @@ class DebtItem {
     this.note,
     this.creationTransactionId,
     this.repaymentTransactionId,
+    this.remainingAmount,
+    this.createdType,
+    this.repaymentLog = const [],
     required this.createdAt,
   });
 
   final String id;
   final String person;
+  // Original principal recorded when the debt was created. This never changes
+  // even if overpayments flip the direction of the debt.
   final double amount;
   final DebtType type;
   final DebtSettlement settlement;
   final String? note;
   final String? creationTransactionId;
   final String? repaymentTransactionId;
+  // Outstanding balance after partial repayments. Null means the full amount
+  // is still owed (backwards compatible with records created before partial
+  // repayments existed).
+  final double? remainingAmount;
+  // Direction the debt was originally created in (before any overpay flips).
+  // Null falls back to `type` for records created before this was tracked.
+  final DebtType? createdType;
+  // Ordered history of repayments, used to revert changes when a linked
+  // repayment transaction is deleted.
+  final List<DebtRepayment> repaymentLog;
   final DateTime createdAt;
 
   bool get isClosed => settlement != DebtSettlement.active;
   bool get isRepaid => settlement == DebtSettlement.repaid;
 
+  // Current outstanding balance (accounting for any partial repayments).
+  double get remaining => remainingAmount ?? amount;
+
+  bool get hasPartialRepayment => remainingAmount != null && remainingAmount != amount;
+
+  // The direction the debt was first recorded in.
+  DebtType get originType => createdType ?? type;
+
   DebtItem copyWith({
+    DebtType? type,
     DebtSettlement? settlement,
     String? repaymentTransactionId,
     bool clearRepaymentTransactionId = false,
+    double? remainingAmount,
+    bool clearRemainingAmount = false,
+    DebtType? createdType,
+    List<DebtRepayment>? repaymentLog,
   }) => DebtItem(
     id: id,
     person: person,
     amount: amount,
-    type: type,
+    type: type ?? this.type,
     settlement: settlement ?? this.settlement,
     note: note,
     creationTransactionId: creationTransactionId,
     repaymentTransactionId: clearRepaymentTransactionId
         ? null
         : repaymentTransactionId ?? this.repaymentTransactionId,
+    remainingAmount: clearRemainingAmount
+        ? null
+        : remainingAmount ?? this.remainingAmount,
+    createdType: createdType ?? this.createdType,
+    repaymentLog: repaymentLog ?? this.repaymentLog,
     createdAt: createdAt,
   );
 
@@ -698,6 +754,9 @@ class DebtItem {
       'note': note,
       'creationTransactionId': creationTransactionId,
       'repaymentTransactionId': repaymentTransactionId,
+      'remainingAmount': remainingAmount,
+      'createdType': createdType?.name,
+      'repaymentLog': repaymentLog.map((entry) => entry.toMap()).toList(),
       'createdAt': createdAt.millisecondsSinceEpoch,
     };
   }
@@ -718,6 +777,17 @@ class DebtItem {
       note: data['note'] as String?,
       creationTransactionId: data['creationTransactionId'] as String?,
       repaymentTransactionId: data['repaymentTransactionId'] as String?,
+      remainingAmount: (data['remainingAmount'] as num?)?.toDouble(),
+      createdType: (data['createdType'] as String?) == null
+          ? null
+          : DebtType.values.firstWhere(
+              (t) => t.name == data['createdType'],
+              orElse: () => DebtType.borrowed,
+            ),
+      repaymentLog: ((data['repaymentLog'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((entry) => DebtRepayment.fromMap(Map<String, dynamic>.from(entry)))
+          .toList(),
       createdAt: DateTime.fromMillisecondsSinceEpoch(
         (data['createdAt'] as num?)?.toInt() ?? 0,
       ),

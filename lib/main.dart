@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 
 import 'auth_gate.dart';
 import 'firebase_options.dart';
@@ -93,65 +94,68 @@ class _ErrorScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: const Color(0xFFFFF5F5),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 48),
-                const Icon(
-                  Icons.error_outline,
-                  size: 64,
-                  color: Color(0xFFDC2626),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Something went wrong',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
+      home: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFFFF5F5),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 48),
+                  const Icon(
+                    Icons.error_outline,
+                    size: 64,
                     color: Color(0xFFDC2626),
                   ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'The app encountered an error. Details are shown below.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0xFF6B7280)),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFECACA)),
-                  ),
-                  child: SelectableText(
-                    message.length > 2000
-                        ? '${message.substring(0, 2000)}...\n\n(truncated)'
-                        : message,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      color: Color(0xFF991B1B),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Something went wrong',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFDC2626),
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: () {
-                    _lastError = null;
-                    main();
-                  },
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Reload'),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  const Text(
+                    'The app encountered an error. Details are shown below.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFF6B7280)),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFECACA)),
+                    ),
+                    child: SelectableText(
+                      message.length > 2000
+                          ? '${message.substring(0, 2000)}...\n\n(truncated)'
+                          : message,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        color: Color(0xFF991B1B),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () {
+                      _lastError = null;
+                      main();
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Reload'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -217,16 +221,20 @@ class _MyAppState extends State<MyApp> {
           colorScheme: ColorScheme.fromSeed(seedColor: seed),
           scaffoldBackgroundColor: const Color(0xFFF7F5EF),
           useMaterial3: true,
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            foregroundColor: Color(0xFF0F172A),
-          ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          foregroundColor: Color(0xFF0F172A),
+          systemOverlayStyle: SystemUiOverlayStyle.dark,
+        ),
           textTheme: const TextTheme(
             bodyMedium: TextStyle(color: Color(0xFF0F172A)),
           ),
         ),
-        home: AppLockGate(child: widget.home ?? const AuthGate()),
+        home: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle.dark,
+          child: AppLockGate(child: widget.home ?? const AuthGate()),
+        ),
       ),
     );
   }

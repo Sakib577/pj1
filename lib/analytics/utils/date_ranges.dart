@@ -83,7 +83,7 @@ PeriodWindow buildWindowFromDateRange({
   required DateTime now,
   DateRange? range,
 }) {
-  final resolved = range ?? const DateRange.preset(DateRangePreset.last30);
+  final resolved = range ?? const DateRange.preset(DateRangePreset.thisMonth);
   final start = _Day.today(now);
 
   if (resolved.custom) {

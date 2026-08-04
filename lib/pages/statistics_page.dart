@@ -66,25 +66,23 @@ class _StatisticsPageState extends State<StatisticsPage> {
           appBar: AppBar(
             toolbarHeight: 72,
             automaticallyImplyLeading: false,
-            title: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  tooltip: 'Back',
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                ),
-                const Text(
-                  'Statistics',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                ),
-                TextButton.icon(
-                  onPressed: _pickRange,
-                  icon: const Icon(Icons.date_range_outlined, size: 18),
-                  label: Text(bundle.window.label),
-                ),
-              ],
+            centerTitle: true,
+            title: const Text(
+              'Statistics',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
             ),
+            leading: IconButton(
+              tooltip: 'Back',
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            ),
+            actions: [
+              TextButton.icon(
+                onPressed: _pickRange,
+                icon: const Icon(Icons.date_range_outlined, size: 18),
+                label: Text(bundle.window.label),
+              ),
+            ],
           ),
           body: _StatisticsGrid(
             bundle: bundle,

@@ -17,7 +17,7 @@ class StatisticsController extends ChangeNotifier {
 
   final FinanceAppState _state;
   final AnalyticsRepository _repository = const AnalyticsRepository();
-  DateRange _range = const DateRange.preset(DateRangePreset.last30);
+  DateRange _range = const DateRange.preset(DateRangePreset.thisMonth);
   String _cacheKey = '';
   StatisticsBundle? _cache;
 

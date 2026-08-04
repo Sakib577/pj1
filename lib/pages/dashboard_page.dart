@@ -292,10 +292,6 @@ class _DashboardPageState extends State<DashboardPage> {
     ).push(MaterialPageRoute(builder: (_) => const PlannedPaymentsPage()));
   }
 
-  void _openDebts() {
-    _onNavTap(3);
-  }
-
   Future<void> _openAddDebtPage() async {
     final messenger = ScaffoldMessenger.of(context);
     final added = await Navigator.of(
@@ -575,9 +571,6 @@ class _DashboardPageState extends State<DashboardPage> {
         onOpenPlannedPayments: () {
           _openFromDrawer(_openPlannedPayments);
         },
-        onOpenDebts: () {
-          _openFromDrawer(_openDebts);
-        },
         onOpenShoppingList: () {
           _openFromDrawer(_openShoppingList);
         },
@@ -673,7 +666,6 @@ class _AppDrawer extends StatelessWidget {
     required this.onNavigate,
     required this.onOpenCategories,
     required this.onOpenPlannedPayments,
-    required this.onOpenDebts,
     required this.onOpenShoppingList,
     required this.onOpenStatistics,
     required this.onOpenReports,
@@ -685,7 +677,6 @@ class _AppDrawer extends StatelessWidget {
   final ValueChanged<int> onNavigate;
   final VoidCallback onOpenCategories;
   final VoidCallback onOpenPlannedPayments;
-  final VoidCallback onOpenDebts;
   final VoidCallback onOpenShoppingList;
   final VoidCallback onOpenStatistics;
   final VoidCallback onOpenReports;
@@ -782,12 +773,6 @@ class _AppDrawer extends StatelessWidget {
               onTap: onOpenPlannedPayments,
             ),
             _DrawerNavigationItem(
-              icon: Icons.handshake_outlined,
-              label: 'Debts',
-              selected: false,
-              onTap: onOpenDebts,
-            ),
-            _DrawerNavigationItem(
               icon: Icons.shopping_cart_outlined,
               label: 'Shopping List',
               selected: false,
@@ -804,18 +789,6 @@ class _AppDrawer extends StatelessWidget {
               label: 'Reports',
               selected: false,
               onTap: onOpenReports,
-            ),
-            _DrawerNavigationItem(
-              icon: Icons.pie_chart_outline_rounded,
-              label: 'Budgets',
-              selected: selectedIndex == 1,
-              onTap: () => onNavigate(1),
-            ),
-            _DrawerNavigationItem(
-              icon: Icons.savings_outlined,
-              label: 'Savings',
-              selected: selectedIndex == 2,
-              onTap: () => onNavigate(2),
             ),
             _DrawerNavigationItem(
               icon: Icons.swap_horiz_rounded,

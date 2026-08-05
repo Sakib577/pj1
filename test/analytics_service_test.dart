@@ -233,6 +233,109 @@ void main() {
     });
   });
 
+  PlannedPayment planned({
+    required double amount,
+    required DateTime startDate,
+    RepeatFrequency repeat = RepeatFrequency.once,
+  }) => PlannedPayment(
+    id: 'p-${startDate.microsecondsSinceEpoch}-$amount',
+    title: 'Test bill',
+    amount: amount,
+    icon: Icons.payments_rounded,
+    iconColor: const Color(0xFFF97316),
+    categoryName: 'Bills',
+    repeat: repeat,
+    startDate: startDate,
+  );
+
+  group('estimateNextMonthExpense', () {
+    test('uses median of last three complete months when no planned bills', () {
+      final now = DateTime(2026, 8, 5);
+      final rows = [
+        txn(amount: 100, date: DateTime(2026, 5, 10)),
+        txn(amount: 200, date: DateTime(2026, 6, 10)),
+        txn(amount: 300, date: DateTime(2026, 7, 10)),
+      ];
+      final estimate = service.estimateNextMonthExpense(
+        rows,
+        const [],
+        now: now,
+      );
+      expect(estimate?.total, 200);
+    });
+
+    test('adds planned bills due next month', () {
+      final now = DateTime(2026, 8, 5);
+      final rows = [txn(amount: 200, date: DateTime(2026, 7, 10))];
+      final bills = [
+        planned(
+          amount: 500,
+          startDate: DateTime(2026, 8, 1),
+          repeat: RepeatFrequency.monthly,
+        ),
+      ];
+      final estimate = service.estimateNextMonthExpense(
+        rows,
+        bills,
+        now: now,
+      );
+      expect(estimate?.total, 700);
+    });
+
+    test('does not double-count recurring bills already in history', () {
+      final now = DateTime(2026, 8, 5);
+      // 500 rent on the 1st of each month, plus 100 food each month.
+      final rows = [
+        txn(amount: 500, date: DateTime(2026, 5, 1), category: 'Bills'),
+        txn(amount: 100, date: DateTime(2026, 5, 10)),
+        txn(amount: 500, date: DateTime(2026, 6, 1), category: 'Bills'),
+        txn(amount: 100, date: DateTime(2026, 6, 10)),
+        txn(amount: 500, date: DateTime(2026, 7, 1), category: 'Bills'),
+        txn(amount: 100, date: DateTime(2026, 7, 10)),
+      ];
+      final bills = [
+        planned(
+          amount: 500,
+          startDate: DateTime(2026, 5, 1),
+          repeat: RepeatFrequency.monthly,
+        ),
+      ];
+      // Variable baseline 100 + next month's rent 500.
+      final estimate = service.estimateNextMonthExpense(
+        rows,
+        bills,
+        now: now,
+      );
+      expect(estimate?.total, 600);
+    });
+
+    test('returns null with no history and no scheduled bills', () {
+      final now = DateTime(2026, 8, 5);
+      final estimate = service.estimateNextMonthExpense(
+        const [],
+        const [],
+        now: now,
+      );
+      expect(estimate, isNull);
+    });
+
+    test('falls back to current-month run-rate with no complete months', () {
+      final now = DateTime(2026, 8, 5);
+      // A brand-new user spent 50,000 over the first 5 days of the month.
+      final rows = [
+        txn(amount: 30000, date: DateTime(2026, 8, 3)),
+        txn(amount: 20000, date: DateTime(2026, 8, 4)),
+      ];
+      final estimate = service.estimateNextMonthExpense(
+        rows,
+        const [],
+        now: now,
+      );
+      // 50000 / 5 days * 30 days.
+      expect(estimate?.total, closeTo(300000, 0.001));
+    });
+  });
+
   group('bucketStart', () {
     test('weekly buckets to Monday', () {
       // 2026-08-06 is a Thursday.

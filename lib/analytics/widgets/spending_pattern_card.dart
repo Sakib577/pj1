@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../utils/currency_formatters.dart';
-import '../charts/chart_theme.dart';
-import '../charts/stat_bar_chart.dart';
 import '../charts/stat_line_chart.dart';
 import '../models/stat_models.dart';
 import 'range_segmented_control.dart';
@@ -43,7 +41,6 @@ class _SpendingPatternCardState extends State<SpendingPatternCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final palette = ChartPalette.of(context);
     final (points, labelBuilder) = _resolve();
 
     return StatCard(
@@ -78,32 +75,16 @@ class _SpendingPatternCardState extends State<SpendingPatternCard> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (_mode == SpendingPatternMode.daily ||
-                    _mode == SpendingPatternMode.monthly)
-                  StatBarChart(
-                    groups: [
-                      for (final p in points)
-                        StatBarGroup(
-                          label: labelBuilder(p.x),
-                          rods: [
-                            StatBarRod(value: p.y, color: palette.expense),
-                          ],
-                        ),
-                    ],
-                    height: 160,
-                    showTooltip: true,
-                  )
-                else
-                  StatLineChart(
-                    series: [points],
-                    showTooltip: true,
-                    xLabelBuilder: labelBuilder,
-                    tooltipBuilder: (point, _) => formatCurrencyNoCents(
-                      point.y,
-                    ),
-                    maxY: _maxY(points),
-                    height: 160,
+                StatLineChart(
+                  series: [points],
+                  showTooltip: true,
+                  xLabelBuilder: labelBuilder,
+                  tooltipBuilder: (point, _) => formatCurrencyNoCents(
+                    point.y,
                   ),
+                  maxY: _maxY(points),
+                  height: 160,
+                ),
               ],
             ),
     );

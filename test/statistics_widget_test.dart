@@ -126,6 +126,12 @@ void main() {
     await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
 
-    expect(find.text('Statistics'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(Drawer),
+        matching: find.text('Statistics'),
+      ),
+      findsOneWidget,
+    );
   });
 }

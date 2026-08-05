@@ -811,6 +811,207 @@ class AnalyticsService {
   }
 
   // ------------------------------------------------------------------
+  // Next month expense estimate
+  // ------------------------------------------------------------------
+
+  /// Estimates next month's total expense by combining:
+  ///
+  /// 1. The **scheduled planned bills** due in the next calendar month
+  ///    (income items excluded), plus
+  /// 2. A **variable-spending baseline** — the median of the last three fully
+  ///    elapsed months' expenses *after removing* the planned bills that were
+  ///    scheduled in each of those months (so recurring bills are never
+  ///    double-counted).
+  ///
+  /// For users with no fully elapsed month yet (e.g. a brand-new account with
+  /// only a few days of history), the variable baseline falls back to the
+  /// current month's run-rate — variable spending so far scaled up to a full
+  /// 30-day month — so a fresh account does not estimate ~zero.
+  ///
+  /// Returns null when there is neither scheduled spending nor any spending
+  /// history to base the estimate on.
+  NextMonthEstimate? estimateNextMonthExpense(
+    List<TransactionItem> rows,
+    List<PlannedPayment> planned, {
+    DateTime? now,
+  }) {
+    final today = now ?? DateTime.now();
+    final currentKey = today.year * 100 + today.month;
+
+    // Bills due in the upcoming calendar month.
+    final nextMonthStart = DateTime(today.year, today.month + 1, 1);
+    final nextMonthEnd = DateTime(today.year, today.month + 2, 0);
+    final plannedNext = _plannedExpenseTotalIn(
+      planned,
+      nextMonthStart,
+      nextMonthEnd,
+    );
+
+    // Monthly expense totals up to and including the current month.
+    final monthlyTotals = <int, double>{};
+    for (final t in rows) {
+      final d = t.createdAt;
+      if (d == null || !t.negative) continue;
+      final key = d.year * 100 + d.month;
+      if (key > currentKey) continue;
+      monthlyTotals[key] = (monthlyTotals[key] ?? 0) + t.amount;
+    }
+    final keys = monthlyTotals.keys.toList()..sort();
+
+    // Variable (non-planned) spending for the last three complete months.
+    final variables = <double>[];
+    for (final key in keys) {
+      if (key == currentKey) continue;
+      final year = key ~/ 100;
+      final month = key % 100;
+      final monthStart = DateTime(year, month, 1);
+      final monthEnd = DateTime(year, month + 1, 0);
+      final scheduled = _plannedExpenseTotalIn(planned, monthStart, monthEnd);
+      final variable = (monthlyTotals[key] ?? 0) - scheduled;
+      variables.add(variable < 0 ? 0 : variable);
+    }
+    final recent =
+        variables.length <= 3 ? variables : variables.sublist(variables.length - 3);
+
+    // No complete months yet: use the current month's run-rate as the sample.
+    var basisLabel = '';
+    final sample = <double>[...recent];
+    if (sample.isEmpty) {
+      final currentTotal = monthlyTotals[currentKey];
+      if (currentTotal != null && currentTotal > 0) {
+        final variable = _variableExpenseFor(monthlyTotals, planned, currentKey);
+        sample.add(variable / today.day * 30);
+        basisLabel = 'current month\'s pace';
+      }
+    } else {
+      basisLabel = 'median of last ${recent.length} month${recent.length == 1 ? '' : 's'}';
+    }
+
+    if (sample.isEmpty && plannedNext == 0) return null;
+    final baseline = sample.isEmpty ? 0.0 : _median(sample);
+    return NextMonthEstimate(
+      scheduledBills: plannedNext,
+      variableBaseline: baseline,
+      basisLabel: basisLabel,
+      history: _estimateHistory(
+        monthlyTotals,
+        currentKey,
+        today,
+        baseline + plannedNext,
+      ),
+    );
+  }
+
+  /// Builds the comparison chart for the estimate: up to three recent months of
+  /// actual spending (chronological) plus the projected next month's total.
+  List<MonthlySpendPoint> _estimateHistory(
+    Map<int, double> monthlyTotals,
+    int currentKey,
+    DateTime today,
+    double nextTotal,
+  ) {
+    final pastKeys = monthlyTotals.keys
+        .where((k) => k < currentKey)
+        .toList()
+      ..sort();
+    final recent = pastKeys.length <= 3
+        ? pastKeys
+        : pastKeys.sublist(pastKeys.length - 3);
+
+    final points = <MonthlySpendPoint>[];
+    for (final key in recent) {
+      final month = key % 100;
+      points.add(MonthlySpendPoint(
+        label: _shortMonthName(month),
+        amount: monthlyTotals[key] ?? 0,
+        isEstimate: false,
+      ));
+    }
+    final currentTotal = monthlyTotals[currentKey];
+    if (recent.isEmpty && currentTotal != null && currentTotal > 0) {
+      points.add(MonthlySpendPoint(
+        label: '${_shortMonthName(today.month)}*',
+        amount: currentTotal,
+        isEstimate: false,
+      ));
+    }
+    points.add(MonthlySpendPoint(
+      label: _shortMonthName(today.month + 1 > 12 ? 1 : today.month + 1),
+      amount: nextTotal,
+      isEstimate: true,
+    ));
+    return points;
+  }
+
+  String _shortMonthName(int month) {
+    const names = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return names[month - 1];
+  }
+
+  /// Variable (non-planned) spending for a given month key `year*100 + month`,
+  /// i.e. the month's total minus its scheduled planned bills.
+  double _variableExpenseFor(
+    Map<int, double> monthlyTotals,
+    List<PlannedPayment> planned,
+    int key,
+  ) {
+    final year = key ~/ 100;
+    final month = key % 100;
+    final monthStart = DateTime(year, month, 1);
+    final monthEnd = DateTime(year, month + 1, 0);
+    final scheduled = _plannedExpenseTotalIn(planned, monthStart, monthEnd);
+    final variable = (monthlyTotals[key] ?? 0) - scheduled;
+    return variable < 0 ? 0 : variable;
+  }
+
+  /// Sums the scheduled (non-income) planned payment amounts whose occurrence
+  /// dates fall within [monthStart]..[monthEnd] inclusive.
+  double _plannedExpenseTotalIn(
+    List<PlannedPayment> planned,
+    DateTime monthStart,
+    DateTime monthEnd,
+  ) {
+    double total = 0;
+    for (final p in planned) {
+      if (p.isIncome) continue;
+      if (p.repeat == RepeatFrequency.once) {
+        final due = DateTime(p.startDate.year, p.startDate.month, p.startDate.day);
+        if (!due.isBefore(monthStart) && !due.isAfter(monthEnd)) {
+          total += p.amount;
+        }
+        continue;
+      }
+      var date = DateTime(
+        p.startDate.year,
+        p.startDate.month,
+        p.startDate.day,
+      );
+      var guard = 0;
+      while (date.isBefore(monthStart) && guard < 10000) {
+        date = p.advance(date);
+        guard++;
+      }
+      while (!date.isAfter(monthEnd) && guard < 10000) {
+        total += p.amount;
+        date = p.advance(date);
+        guard++;
+      }
+    }
+    return total;
+  }
+
+  double _median(List<double> values) {
+    final sorted = [...values]..sort();
+    final n = sorted.length;
+    if (n == 0) return 0;
+    if (n.isOdd) return sorted[n ~/ 2];
+    return (sorted[n ~/ 2 - 1] + sorted[n ~/ 2]) / 2;
+  }
+
+  // ------------------------------------------------------------------
   // Balance history ranges
   // ------------------------------------------------------------------
   List<TrendSeries> calculateBalanceHistory(

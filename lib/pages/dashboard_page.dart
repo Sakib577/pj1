@@ -2,6 +2,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'package:pj1/analytics/models/analytics_models.dart';
+import 'package:pj1/analytics/models/stat_models.dart';
+import 'package:pj1/analytics/services/analytics_service.dart';
+import 'package:pj1/analytics/widgets/category_donut_card.dart';
+import 'package:pj1/analytics/widgets/next_month_estimate_card.dart';
 import 'package:pj1/models/finance_models.dart';
 import 'package:pj1/pages/add_transaction_page.dart';
 import 'package:pj1/pages/budget_page.dart';
@@ -544,6 +549,26 @@ class _DashboardPageState extends State<DashboardPage> {
                                 ),
                               ),
                             ),
+                      const SizedBox(height: 12),
+                      _SectionHeader(
+                        title: 'Statistics',
+                        trailing: 'View All',
+                        onTrailingPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const StatisticsPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _DashboardStatisticsSection(
+                        categories: _topCategories(appState.transactions),
+                        nextMonthEstimate: _nextMonthEstimate(
+                          appState.transactions,
+                          appState.plannedPayments,
+                        ),
+                      ),
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -1073,6 +1098,57 @@ class _SectionHeader extends StatelessWidget {
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+const _dashboardAnalytics = AnalyticsService();
+
+List<CategoryStat> _topCategories(List<TransactionItem> transactions) {
+  final window = PeriodWindow.fromDateRange();
+  return _dashboardAnalytics.calculateCategorySpending(transactions, window);
+}
+
+NextMonthEstimate? _nextMonthEstimate(
+  List<TransactionItem> transactions,
+  List<PlannedPayment> planned,
+) =>
+    _dashboardAnalytics.estimateNextMonthExpense(transactions, planned);
+
+/// The dashboard "Statistics" teaser: top spending categories for this month
+/// plus an estimate of next month's total expense.
+class _DashboardStatisticsSection extends StatelessWidget {
+  const _DashboardStatisticsSection({
+    required this.categories,
+    required this.nextMonthEstimate,
+  });
+
+  final List<CategoryStat> categories;
+  final NextMonthEstimate? nextMonthEstimate;
+
+  @override
+  Widget build(BuildContext context) {
+    if (categories.isEmpty && nextMonthEstimate == null) {
+      return const EmptyStateCard(
+        title: 'No statistics yet',
+        subtitle: 'Add transactions to see spending insights.',
+        icon: Icons.insights_outlined,
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (categories.isNotEmpty) ...[
+          CategoryDonutCard(
+            categories: categories,
+            rangeLabel: 'This month',
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (nextMonthEstimate != null) ...[
+          NextMonthEstimateCard(estimate: nextMonthEstimate!),
+        ],
       ],
     );
   }

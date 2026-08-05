@@ -979,10 +979,10 @@ class PlannedPayment {
     if (lastConfirmed != null) {
       final confirmed = _dateOnly(lastConfirmed);
       if (confirmed.isAfter(date)) {
-        date = _advance(confirmed);
+        date = advance(confirmed);
       }
       if (date.isAtSameMomentAs(confirmed)) {
-        date = _advance(date);
+        date = advance(date);
       }
     }
     if (repeat == RepeatFrequency.once) return date;
@@ -990,7 +990,7 @@ class PlannedPayment {
     // forever and freeze the UI (white screen) on corrupt data.
     var guard = 0;
     while (date.isBefore(target) && guard < 10000) {
-      date = _advance(date);
+      date = advance(date);
       guard++;
     }
     return date;
@@ -1010,10 +1010,10 @@ class PlannedPayment {
     if (lastConfirmed != null) {
       final confirmed = _dateOnly(lastConfirmed);
       if (confirmed.isAfter(date)) {
-        date = _advance(confirmed);
+        date = advance(confirmed);
       }
       if (date.isAtSameMomentAs(confirmed)) {
-        date = _advance(date);
+        date = advance(date);
       }
     }
     if (repeat == RepeatFrequency.once) return date;
@@ -1021,7 +1021,7 @@ class PlannedPayment {
     // forever and freeze the UI (white screen) on corrupt data.
     var guard = 0;
     while (guard < 10000) {
-      final next = _advance(date);
+      final next = advance(date);
       if (next.isAfter(target)) break;
       date = next;
       guard++;
@@ -1048,7 +1048,7 @@ class PlannedPayment {
     return _dateOnly(DateTime.now()).isAfter(due);
   }
 
-  DateTime _advance(DateTime date) {
+  DateTime advance(DateTime date) {
     switch (repeat) {
       case RepeatFrequency.daily:
         return date.add(const Duration(days: 1));

@@ -6,21 +6,19 @@ import '../analytics/providers/statistics_controller.dart';
 import '../analytics/services/analytics_service.dart';
 import '../analytics/utils/date_ranges.dart';
 import '../models/finance_models.dart';
-import '../analytics/widgets/balance_history_card.dart';
-import '../analytics/widgets/balance_trend_card.dart';
 import '../analytics/widgets/budget_progress_card.dart';
 import '../analytics/widgets/cash_flow_forecast_card.dart';
 import '../analytics/widgets/cash_flow_summary_card.dart';
-import '../analytics/widgets/cash_flow_trend_card.dart';
 import '../analytics/widgets/category_donut_card.dart';
 import '../analytics/widgets/date_range_picker.dart';
 import '../analytics/widgets/debt_ratio_card.dart';
 import '../analytics/widgets/income_analytics_card.dart';
-import '../analytics/widgets/income_expense_comparison_card.dart';
 import '../analytics/widgets/monthly_overview_card.dart';
-import '../analytics/widgets/savings_trend_card.dart';
+import '../analytics/widgets/next_month_estimate_card.dart';
 import '../analytics/widgets/spending_pattern_card.dart';
 import '../analytics/widgets/top_expenses_card.dart';
+import '../analytics/widgets/trends_card.dart';
+import '../analytics/widgets/balance_history_card.dart';
 import '../state/finance_app_state.dart';
 
 const _service = AnalyticsService();
@@ -143,12 +141,66 @@ class _StatisticsGrid extends StatelessWidget {
     final cards = <Widget>[];
     void add(Widget card) => cards.add(card);
 
-    // 1. Balance Trend
+    // 1. Trends (balance / spending / cash flow / income vs expense /
+    //    savings / history) chosen from a dropdown.
     add(
-      BalanceTrendCard(
-        trend: bundle.balanceTrend,
+      TrendsCard(
+        balanceTrend: bundle.balanceTrend,
+        spendingByGranularity: {
+          BucketGranularity.daily: _firstPoints(
+            _service.calculateSpendingTrend(
+              txns,
+              window,
+              BucketGranularity.daily,
+            ),
+          ),
+          BucketGranularity.weekly: _firstPoints(
+            _service.calculateSpendingTrend(
+              txns,
+              window,
+              BucketGranularity.weekly,
+            ),
+          ),
+          BucketGranularity.monthly: _firstPoints(
+            _service.calculateSpendingTrend(
+              txns,
+              window,
+              BucketGranularity.monthly,
+            ),
+          ),
+        },
+        cashFlowBars: _service.calculateIncomeExpenseComparison(
+          txns,
+          window,
+          BucketGranularity.daily,
+        ),
+        incomeExpenseByGranularity: {
+          BucketGranularity.daily: _service.calculateIncomeExpenseComparison(
+            txns,
+            window,
+            BucketGranularity.daily,
+          ),
+          BucketGranularity.weekly: _service.calculateIncomeExpenseComparison(
+            txns,
+            window,
+            BucketGranularity.weekly,
+          ),
+          BucketGranularity.monthly: _service.calculateIncomeExpenseComparison(
+            txns,
+            window,
+            BucketGranularity.monthly,
+          ),
+        },
+        savingsSeries: bundle.savingsTrend,
+        savingsGoal: _totalSavingsGoal(state),
+        historyByRange: {
+          BalanceHistoryRange.week: _balancePoints(txns, 7),
+          BalanceHistoryRange.month: _balancePoints(txns, 30),
+          BalanceHistoryRange.threeMonths: _balancePoints(txns, 90),
+          BalanceHistoryRange.sixMonths: _balancePoints(txns, 180),
+          BalanceHistoryRange.year: _balancePoints(txns, 365),
+        },
         rangeLabel: window.label,
-        onRangeTap: onRangeTap,
       ),
     );
 
@@ -161,20 +213,7 @@ class _StatisticsGrid extends StatelessWidget {
       ),
     );
 
-    // 3. Cash Flow Trend (income/expense per day via grouped bars)
-    add(
-      CashFlowTrendCard(
-        bars: _service.calculateIncomeExpenseComparison(
-          txns,
-          window,
-          BucketGranularity.daily,
-        ),
-        rangeLabel: window.label,
-        onRangeTap: onRangeTap,
-      ),
-    );
-
-    // 4. Spending by Categories
+    // 3. Spending by Categories
     add(
       CategoryDonutCard(
         categories: bundle.categorySpending,
@@ -183,7 +222,7 @@ class _StatisticsGrid extends StatelessWidget {
       ),
     );
 
-    // 5. Spending Pattern (hourly/daily/weekly/monthly)
+    // 4. Spending Pattern (hourly/daily/weekly/monthly)
     add(
       SpendingPatternCard(
         hourly: bundle.hourlyPattern,
@@ -203,7 +242,7 @@ class _StatisticsGrid extends StatelessWidget {
       ),
     );
 
-    // 6. Top Expenses
+    // 5. Top Expenses
     add(
       TopExpensesCard(
         expenses: bundle.topExpenses,
@@ -212,7 +251,7 @@ class _StatisticsGrid extends StatelessWidget {
       ),
     );
 
-    // 7. Debt-to-Income
+    // 6. Debt-to-Income
     if (bundle.debtRatio != null) {
       add(
         DebtRatioCard(
@@ -223,30 +262,7 @@ class _StatisticsGrid extends StatelessWidget {
       );
     }
 
-    // 8. Income vs Expense
-    add(
-      IncomeExpenseComparisonCard(
-        daily: _service.calculateIncomeExpenseComparison(
-          txns,
-          window,
-          BucketGranularity.daily,
-        ),
-        weekly: _service.calculateIncomeExpenseComparison(
-          txns,
-          window,
-          BucketGranularity.weekly,
-        ),
-        monthly: _service.calculateIncomeExpenseComparison(
-          txns,
-          window,
-          BucketGranularity.monthly,
-        ),
-        rangeLabel: window.label,
-        onRangeTap: onRangeTap,
-      ),
-    );
-
-    // 9. Monthly Overview
+    // 7. Monthly Overview
     add(
       MonthlyOverviewCard(
         overview: bundle.monthlyOverview,
@@ -255,7 +271,7 @@ class _StatisticsGrid extends StatelessWidget {
       ),
     );
 
-    // 10. Income Analytics
+    // 8. Income Analytics
     add(
       IncomeAnalyticsCard(
         analytics: bundle.incomeAnalytics,
@@ -264,7 +280,7 @@ class _StatisticsGrid extends StatelessWidget {
       ),
     );
 
-    // 11. Budget Progress
+    // 9. Budget Progress
     add(
       BudgetProgressCard(
         progress: bundle.budgetProgress,
@@ -272,16 +288,7 @@ class _StatisticsGrid extends StatelessWidget {
       ),
     );
 
-    // 12. Savings Trend
-    add(
-      SavingsTrendCard(
-        series: bundle.savingsTrend,
-        goalTarget: _totalSavingsGoal(state),
-        rangeLabel: window.label,
-      ),
-    );
-
-    // 13. Cash Flow Forecast
+    // 10. Cash Flow Forecast
     add(
       CashFlowForecastCard(
         points: bundle.cashFlowForecast,
@@ -289,19 +296,14 @@ class _StatisticsGrid extends StatelessWidget {
       ),
     );
 
-    // 14. Balance History
-    add(
-      BalanceHistoryCard(
-        seriesByRange: {
-          BalanceHistoryRange.week: _balancePoints(txns, 7),
-          BalanceHistoryRange.month: _balancePoints(txns, 30),
-          BalanceHistoryRange.threeMonths: _balancePoints(txns, 90),
-          BalanceHistoryRange.sixMonths: _balancePoints(txns, 180),
-          BalanceHistoryRange.year: _balancePoints(txns, 365),
-        },
-        rangeLabel: window.label,
-      ),
+    // 11. Estimated Next Month's Expense
+    final estimate = _service.estimateNextMonthExpense(
+      txns,
+      state.plannedPayments,
     );
+    if (estimate != null) {
+      add(NextMonthEstimateCard(estimate: estimate));
+    }
 
     return cards;
   }

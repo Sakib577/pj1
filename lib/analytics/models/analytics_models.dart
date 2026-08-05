@@ -59,6 +59,44 @@ class FinancialHealthMetric {
   final String message;
 }
 
+/// A projection of next month's total expense, split into the recurring
+/// scheduled bills and the variable-spending baseline it was built from.
+class NextMonthEstimate {
+  const NextMonthEstimate({
+    required this.scheduledBills,
+    required this.variableBaseline,
+    required this.basisLabel,
+    required this.history,
+  });
+
+  final double scheduledBills;
+  final double variableBaseline;
+
+  /// Human-readable description of where the variable baseline came from
+  /// (e.g. "median of last 3 months" or "current month's pace").
+  final String basisLabel;
+
+  /// Recent months of actual spending (chronological), ending with the next
+  /// month's projected total so a card can render a comparison chart.
+  final List<MonthlySpendPoint> history;
+
+  double get total => scheduledBills + variableBaseline;
+}
+
+/// One bar in the estimate's comparison chart: a recent month of actual
+/// spending, or the projected next month ([isEstimate]).
+class MonthlySpendPoint {
+  const MonthlySpendPoint({
+    required this.label,
+    required this.amount,
+    required this.isEstimate,
+  });
+
+  final String label;
+  final double amount;
+  final bool isEstimate;
+}
+
 /// The full per-category analytics dataset (spending + income combined).
 class CategoryAnalytics {
   const CategoryAnalytics({

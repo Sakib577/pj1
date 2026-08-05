@@ -25,8 +25,11 @@ String formatCurrency(double value) {
 }
 
 String formatCurrencyNoCents(double value) {
-  final rounded = value.roundToDouble();
-  final displayedValue = CurrencySettings.fromUsd(rounded);
+  // Convert to the display currency FIRST, then round. Rounding the raw value
+  // (USD) before converting loses precision for high-rate currencies: e.g.
+  // 4.05 USD at 123.5 BDT/USD is 500 BDT, but rounding 4.05 to 4 USD first
+  // would display 494 instead.
+  final displayedValue = CurrencySettings.fromUsd(value);
   final isNegative = displayedValue < 0;
   final absoluteValue = displayedValue.abs();
   // Build comma-separated thousands manually so no extra intl package is needed.

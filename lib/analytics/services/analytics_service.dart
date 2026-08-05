@@ -734,7 +734,16 @@ class AnalyticsService {
     PeriodWindow window,
     List<SavingsGoal> goals,
   ) {
-    final buckets = _buildBuckets(window, BucketGranularity.monthly);
+    // Choose a bucket size that matches the window length so short windows
+    // (e.g. "This month") show contributions on their actual day instead of
+    // collapsing everything into a single monthly bucket.
+    final days = window.end.difference(window.start).inDays + 1;
+    final granularity = days <= 45
+        ? BucketGranularity.daily
+        : days <= 180
+            ? BucketGranularity.weekly
+            : BucketGranularity.monthly;
+    final buckets = _buildBuckets(window, granularity);
     final savings = <DateTime, double>{};
     for (final key in buckets) {
       savings[key] = 0;
@@ -742,10 +751,11 @@ class AnalyticsService {
     for (final t in rows) {
       final d = t.createdAt;
       if (d == null || !_inWindow(d, window)) continue;
-      if (!t.negative && _isSavings(t)) {
-        savings[bucketStart(d, BucketGranularity.monthly)] =
-            (savings[bucketStart(d, BucketGranularity.monthly)] ?? 0) +
-            t.amount;
+      // Savings contributions are recorded as expenses (negative=true), so sum
+      // those; summing income (withdrawals) would invert the graph.
+      if (t.negative && _isSavings(t)) {
+        savings[bucketStart(d, granularity)] =
+            (savings[bucketStart(d, granularity)] ?? 0) + t.amount;
       }
     }
     final points = [
@@ -774,40 +784,46 @@ class AnalyticsService {
     List<TransactionItem> rows,
     PeriodWindow window, {
     int horizonDays = 14,
+    int lookbackDays = 7,
   }) {
-    // Simple linear projection of the daily net over the recent window tail.
+    // Project the recent daily net forward. The actual portion shows the real
+    // daily net over the last [lookbackDays] days ending at the most recent
+    // transaction; the forecast then continues from the day after that last
+    // actual point so the line stays continuous (no gap between the two).
     final inWindow = rows.where((t) => _inWindow(t.createdAt, window)).toList();
     final days = window.end.difference(window.start).inDays + 1;
     final avgDaily = days == 0
         ? 0.0
         : inWindow.fold<double>(0, (s, t) => s + (t.negative ? -t.amount : t.amount)) / days;
 
-    final last = window.end;
+    final lastActual = inWindow.isEmpty
+        ? window.start
+        : (inWindow.map((t) => t.createdAt!).toList()
+      ..sort()
+    ).last;
+    final lastDay = DateTime(lastActual.year, lastActual.month, lastActual.day);
+
     final result = <ForecastPoint>[];
+    var cursor = lastDay.subtract(Duration(days: lookbackDays - 1));
+    if (cursor.isBefore(window.start)) cursor = window.start;
+    for (var d = cursor; !d.isAfter(lastDay); d = d.add(const Duration(days: 1))) {
+      final dayNet = inWindow
+          .where((t) =>
+              t.createdAt != null &&
+              bucketStart(t.createdAt!, BucketGranularity.daily) == d)
+          .fold<double>(0, (s, t) => s + (t.negative ? -t.amount : t.amount));
+      result.add(ForecastPoint(x: d, value: dayNet, forecast: false));
+    }
+
     for (var i = 1; i <= horizonDays; i++) {
       result.add(
         ForecastPoint(
-          x: last.add(Duration(days: i)),
+          x: lastDay.add(Duration(days: i)),
           value: avgDaily,
           forecast: true,
         ),
       );
     }
-    // Anchor with the last actual date, using the same daily-net scale as the
-    // forecast points so the Y axis stays proportional to the recent spend.
-    final actualAnchor = inWindow.isEmpty
-        ? window.start
-        : (inWindow.map((t) => t.createdAt!).toList()
-      ..sort()
-    ).last;
-    result.insert(
-      0,
-      ForecastPoint(
-        x: actualAnchor,
-        value: avgDaily,
-        forecast: false,
-      ),
-    );
     return result;
   }
 

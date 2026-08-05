@@ -422,6 +422,16 @@ class FinanceAppState extends ChangeNotifier {
     unawaited(_write((uid) => _financeRepository.deleteTransaction(uid, id)));
   }
 
+  /// Extracts the savings goal id from a transaction id formatted as
+  /// `savings-<goalId>-<micros>` (goal ids are plain microsecond timestamps).
+  String? _savingsGoalIdFromTransactionId(String id) {
+    const prefix = 'savings-';
+    if (!id.startsWith(prefix)) return null;
+    final body = id.substring(prefix.length);
+    final dash = body.lastIndexOf('-');
+    return dash == -1 ? null : body.substring(0, dash);
+  }
+
   List<ShoppingItem> get shoppingItems => List.unmodifiable(_shoppingItems);
 
   List<String> get shoppingSubcategories {
@@ -758,6 +768,7 @@ class FinanceAppState extends ChangeNotifier {
         subcategories: const [],
       ),
       note: 'Added to ${_goals[index].title}',
+      idPrefix: 'savings-${_goals[index].id}',
     );
   }
 
@@ -786,6 +797,7 @@ class FinanceAppState extends ChangeNotifier {
         subcategories: const [],
       ),
       note: 'Withdrawn from ${_goals[index].title}',
+      idPrefix: 'savings-${_goals[index].id}',
     );
   }
 
@@ -1446,9 +1458,12 @@ class FinanceAppState extends ChangeNotifier {
     required ExpenseCategory category,
     String? subcategory,
     String? note,
+    String? idPrefix,
   }) {
     final now = DateTime.now();
-    final id = now.microsecondsSinceEpoch.toString();
+    final id = idPrefix == null
+        ? now.microsecondsSinceEpoch.toString()
+        : '$idPrefix-${now.microsecondsSinceEpoch}';
 
     _balance += isIncome ? amountUsd : -amountUsd;
     if (isIncome) {
@@ -1510,6 +1525,35 @@ class FinanceAppState extends ChangeNotifier {
   void deleteTransaction(String id) {
     final index = _transactions.indexWhere((txn) => txn.id == id);
     if (index == -1) return;
+
+    if (id.startsWith('savings-')) {
+      // Deleting a savings contribution/withdrawal reverts the goal it funded,
+      // mirroring how deleting a debt repayment reverts the debt. The goal id
+      // is embedded in the transaction id (savings-<goalId>-<micros>).
+      final goalId = _savingsGoalIdFromTransactionId(id);
+      final txn = _transactions[index];
+      final goalIndex = _goals.indexWhere((goal) => goal.id == goalId);
+      if (goalIndex != -1) {
+        // Contributions are expenses that raised goal.current; withdrawals are
+        // income that lowered it, so removing the txn reverses that delta.
+        final reverted = _goals[goalIndex].current +
+            (txn.negative ? -txn.amount : txn.amount);
+        _goals[goalIndex] = _goals[goalIndex].copyWith(
+          current: reverted < 0 ? 0 : reverted,
+        );
+        unawaited(
+          _write(
+            (uid) => _financeRepository.saveSavingsGoal(uid, _goals[goalIndex]),
+          ),
+        );
+      }
+      _transactions.removeAt(index);
+      _recomputeTotals();
+      notifyListeners();
+      unawaited(_write((uid) => _financeRepository.deleteTransaction(uid, id)));
+      _checkBudgetAlerts();
+      return;
+    }
 
     if (id.startsWith('debt-')) {
       // Deleting a debt's creation transaction removes the whole debt record.

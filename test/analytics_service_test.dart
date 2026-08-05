@@ -103,6 +103,46 @@ void main() {
     });
   });
 
+  group('calculateCashFlowForecast', () {
+    test('forecast continues the day after the last actual transaction', () {
+      final now = DateTime(2026, 8, 5);
+      final w = buildWindowFromDateRange(now: now);
+      final rows = [
+        txn(amount: 300, date: DateTime(2026, 8, 1), negative: false),
+        txn(amount: 100, date: DateTime(2026, 8, 3)),
+        txn(amount: 50, date: DateTime(2026, 8, 5)),
+      ];
+      final points = service.calculateCashFlowForecast(rows, w);
+      final actual = points.where((p) => !p.forecast).toList();
+      final forecast = points.where((p) => p.forecast).toList();
+
+      // Actual daily net for the lookback days leading up to the last txn.
+      expect(actual, isNotEmpty);
+      expect(actual.last.x, DateTime(2026, 8, 5));
+      // 1 Aug: +300 income; 3 Aug: -100; 5 Aug: -50.
+      final aug1 = actual.firstWhere((p) => p.x == DateTime(2026, 8, 1));
+      final aug3 = actual.firstWhere((p) => p.x == DateTime(2026, 8, 3));
+      expect(aug1.value, 300);
+      expect(aug3.value, -100);
+
+      // No gap: forecast starts the day after the last actual date.
+      expect(forecast, hasLength(14));
+      expect(forecast.first.x, DateTime(2026, 8, 6));
+      for (var i = 0; i < forecast.length; i++) {
+        expect(forecast[i].x, DateTime(2026, 8, 6).add(Duration(days: i)));
+      }
+    });
+
+    test('empty window still yields a usable forecast series', () {
+      final now = DateTime(2026, 8, 5);
+      final w = buildWindowFromDateRange(now: now);
+      final points = service.calculateCashFlowForecast(const [], w);
+      expect(points, isNotEmpty);
+      expect(points.any((p) => !p.forecast), isTrue);
+      expect(points.any((p) => p.forecast), isTrue);
+    });
+  });
+
   group('calculateCategorySpending', () {
     test('groups by base category and computes percentages', () {
       final now = DateTime(2026, 8, 5);
@@ -333,6 +373,72 @@ void main() {
       );
       // 50000 / 5 days * 30 days.
       expect(estimate?.total, closeTo(300000, 0.001));
+    });
+  });
+
+  group('calculateSavingsTrend', () {
+    test('sums savings contributions (expenses), not withdrawals', () {
+      final now = DateTime(2026, 8, 5);
+      final w = buildWindowFromDateRange(now: now);
+      final rows = [
+        // Savings contribution recorded as an expense (negative).
+        txn(amount: 500, date: DateTime(2026, 8, 2), category: 'Savings'),
+        // Another contribution in the same month.
+        txn(amount: 300, date: DateTime(2026, 8, 4), category: 'Savings'),
+        // A withdrawal is income and must NOT add to the savings trend.
+        txn(
+          amount: 200,
+          date: DateTime(2026, 8, 3),
+          category: 'Savings',
+          negative: false,
+        ),
+        // Unrelated expense must be ignored.
+        txn(amount: 100, date: DateTime(2026, 8, 1)),
+      ];
+      final series = service.calculateSavingsTrend(rows, w, const []);
+      expect(series, hasLength(1));
+      expect(series.first.current, 800);
+      // A month-long window buckets daily, so contributions appear on their
+      // actual days instead of collapsing into a single monthly point.
+      final byDay = {
+        for (final p in series.first.points)
+          '${p.x.year}-${p.x.month}-${p.x.day}': p.y,
+      };
+      expect(byDay['2026-8-2'], 500);
+      expect(byDay['2026-8-4'], 300);
+      expect(byDay['2026-8-1'], 0);
+      expect(series.first.points.fold<double>(0, (s, p) => s + p.y), 800);
+    });
+
+    test('uses weekly buckets for medium windows, monthly for long ones', () {
+      final rows = [
+        txn(amount: 500, date: DateTime(2026, 6, 3), category: 'Savings'),
+      ];
+      // A 3-month window (~92 days) buckets weekly.
+      final threeMonth = buildWindowFromDateRange(
+        now: DateTime(2026, 8, 5),
+        range: DateRange.custom(
+          start: DateTime(2026, 5, 1),
+          end: DateTime(2026, 7, 31),
+        ),
+      );
+      final weekly = service.calculateSavingsTrend(rows, threeMonth, const []);
+      expect(weekly.first.points, hasLength(greaterThan(10)));
+
+      // A year-long window buckets monthly.
+      final year = buildWindowFromDateRange(
+        now: DateTime(2026, 8, 5),
+        range: DateRange.custom(
+          start: DateTime(2026, 1, 1),
+          end: DateTime(2026, 12, 31),
+        ),
+      );
+      final monthly = service.calculateSavingsTrend(rows, year, const []);
+      expect(monthly.first.points, hasLength(12));
+      final june = monthly.first.points.singleWhere(
+        (p) => p.x.month == 6,
+      );
+      expect(june.y, 500);
     });
   });
 

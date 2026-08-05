@@ -211,6 +211,41 @@ void main() {
       final bytes = await buildStatisticsPdf(bundle: empty, now: DateTime.now());
       expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
     });
+
+    test('renders a flat (constant-value) forecast without pinning to zero',
+        () async {
+      final base = sampleBundle();
+      // All values equal: previously the flat line was drawn at the bottom
+      // edge, reading as "0". The painter must not crash and still emit bytes.
+      final flat = StatisticsBundle(
+        window: base.window,
+        balanceTrend: base.balanceTrend,
+        cashFlow: base.cashFlow,
+        cashFlowTrend: base.cashFlowTrend,
+        categorySpending: base.categorySpending,
+        spendingTrend: base.spendingTrend,
+        topExpenses: base.topExpenses,
+        incomeExpenseComparison: base.incomeExpenseComparison,
+        debtRatio: base.debtRatio,
+        monthlyOverview: base.monthlyOverview,
+        financialHealth: base.financialHealth,
+        categoryAnalytics: base.categoryAnalytics,
+        incomeAnalytics: base.incomeAnalytics,
+        weeklyPattern: base.weeklyPattern,
+        hourlyPattern: base.hourlyPattern,
+        budgetProgress: base.budgetProgress,
+        savingsTrend: base.savingsTrend,
+        cashFlowForecast: [
+          ForecastPoint(x: DateTime(2026, 8, 1), value: 100, forecast: false),
+          ForecastPoint(x: DateTime(2026, 8, 2), value: 100, forecast: true),
+          ForecastPoint(x: DateTime(2026, 8, 3), value: 100, forecast: true),
+        ],
+        balanceHistory: base.balanceHistory,
+      );
+      final bytes = await buildStatisticsPdf(bundle: flat, now: DateTime(2026, 8, 5));
+      expect(bytes, isA<Uint8List>());
+      expect(bytes.length, greaterThan(1000));
+    });
   });
 
   group('buildReportsPdfData', () {

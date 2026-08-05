@@ -33,6 +33,11 @@ const _forecastTail = PdfColor.fromInt(0xFF94A3B8);
 
 const _pageWidth = 515.0;
 
+const _trendPadL = 6.0;
+const _trendPadR = 10.0;
+const _trendPadT = 10.0;
+const _trendPadB = 16.0;
+
 String get _code => CurrencySettings.code;
 
 double _display(double usd) => CurrencySettings.fromUsd(usd);
@@ -686,7 +691,11 @@ Future<Uint8List> buildStatisticsPdf({
         pw.SizedBox(height: 14),
         _spendingPatternSection(bundle.spendingTrend),
         pw.SizedBox(height: 14),
+        _cashFlowTrendSection(bundle.cashFlowTrend),
+        pw.SizedBox(height: 14),
         _balanceTrendSection(bundle.balanceTrend),
+        pw.SizedBox(height: 14),
+        _savingsTrendSection(bundle.savingsTrend),
         pw.SizedBox(height: 14),
         _topExpensesSection(bundle.topExpenses),
         pw.SizedBox(height: 14),
@@ -703,6 +712,84 @@ Future<Uint8List> buildStatisticsPdf({
     ),
   );
   return doc.save();
+}
+
+double _trendMax(List<double> a, List<double>? b) {
+  var m = a.fold<double>(0, (acc, v) => v > acc ? v : acc);
+  if (b != null) {
+    m = b.fold<double>(m, (acc, v) => v > acc ? v : acc);
+  }
+  return m;
+}
+
+double _trendX(int i, int n, double w) =>
+    _trendPadL + (w - _trendPadL - _trendPadR) * (n == 1 ? 0.5 : i / (n - 1));
+
+String _dateLabel(DateTime d) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${d.day} ${months[d.month - 1]}';
+}
+
+/// A smooth trend-line chart with gridlines, a y-axis max label (money, top
+/// left) and time labels on the x-axis. Lines are curvy and never filled.
+pw.Widget _trendChart({
+  required List<double> values,
+  required PdfColor color,
+  List<double>? secondValues,
+  PdfColor? secondColor,
+  List<String>? xLabels,
+  double height = 170,
+  void Function(PdfGraphics canvas, PdfPoint size)? painter,
+}) {
+  final n = values.length;
+  final maxV = _trendMax(values, secondValues);
+  final indices = <int>{};
+  if (n <= 6) {
+    for (var i = 0; i < n; i++) {
+      indices.add(i);
+    }
+  } else {
+    indices.addAll([0, n ~/ 3, (2 * n) ~/ 3, n - 1]);
+  }
+  final paint = painter ??
+      (canvas, size) => _paintTrend(
+            canvas,
+            size.x,
+            size.y,
+            values,
+            color,
+            secondValues: secondValues,
+            secondColor: secondColor,
+          );
+  return pw.SizedBox(
+    height: height,
+    child: pw.Stack(
+      children: [
+        pw.CustomPaint(size: PdfPoint(_pageWidth, height), painter: paint),
+        pw.Positioned(
+          left: _trendPadL,
+          top: 0,
+          child: pw.Text(
+            '$_code ${_num(maxV)}',
+            style: pw.TextStyle(fontSize: 7, color: _muted),
+          ),
+        ),
+        if (xLabels != null)
+          for (final i in indices.toList()..sort())
+            pw.Positioned(
+              left: _trendX(i, n, _pageWidth) - 14,
+              top: height - 13,
+              child: pw.Text(
+                _sanitize(xLabels[i]),
+                style: pw.TextStyle(fontSize: 7, color: _muted),
+              ),
+            ),
+      ],
+    ),
+  );
 }
 
 pw.Widget _cashFlowSection(CashFlowSummary summary, String rangeLabel) {
@@ -845,12 +932,15 @@ pw.Widget _categoryDonutSection(List<CategoryStat> categories) {
 }
 
 pw.Widget _incomeExpenseSection(List<GroupedBar> bars) {
-  final limited = bars.length > 15 ? bars.sublist(bars.length - 15) : bars;
+  final income = [for (final b in bars) _display(b.income)];
+  final expense = [for (final b in bars) _display(b.expense)];
+  final labels = [for (final b in bars) b.label];
+  final hasData = income.any((v) => v != 0) || expense.any((v) => v != 0);
   return _statCard(
     title: 'Income vs Expenses',
     accent: _orange,
     subtitle: '${bars.length} ${bars.length == 1 ? 'period' : 'periods'}',
-    child: limited.isEmpty
+    child: !hasData || income.length < 2
         ? _empty('No income or expenses in this period.')
         : pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -863,27 +953,12 @@ pw.Widget _incomeExpenseSection(List<GroupedBar> bars) {
                 ],
               ),
               pw.SizedBox(height: 8),
-              pw.SizedBox(
-                height: 170,
-                child: pw.Stack(
-                  children: [
-                    pw.Positioned.fill(
-                      child: pw.CustomPaint(
-                        size: PdfPoint(_pageWidth, 170),
-                        painter: (canvas, size) =>
-                            _paintBars(canvas, size.x, size.y, limited),
-                      ),
-                    ),
-                    pw.Positioned(
-                      left: 10,
-                      top: 4,
-                      child: pw.Text(
-                        _maxBarLabel(limited),
-                        style: pw.TextStyle(fontSize: 8, color: _muted),
-                      ),
-                    ),
-                  ],
-                ),
+              _trendChart(
+                values: income,
+                color: _green,
+                secondValues: expense,
+                secondColor: _red,
+                xLabels: labels,
               ),
             ],
           ),
@@ -893,73 +968,57 @@ pw.Widget _incomeExpenseSection(List<GroupedBar> bars) {
 pw.Widget _spendingPatternSection(List<TrendSeries> spendingTrend) {
   final points = spendingTrend.isEmpty ? const <SeriesPoint>[] : spendingTrend.first.points;
   final values = [for (final p in points) _display(p.y)];
+  final labels = [for (final p in points) _dateLabel(p.x)];
   return _statCard(
     title: 'Spending Pattern',
     accent: _orange,
     subtitle: 'Expense per day',
-    child: points.length < 2
+    child: values.length < 2
         ? _empty('No spending in this period.')
-        : pw.SizedBox(
-            height: 170,
-            child: pw.Stack(
-              children: [
-                pw.Positioned.fill(
-                  child: pw.CustomPaint(
-                    size: PdfPoint(_pageWidth, 170),
-                    painter: (canvas, size) =>
-                        _paintLine(canvas, size.x, size.y, values, _orange),
-                  ),
-                ),
-                for (final l in _lineLabels(values, 170))
-                  pw.Positioned(
-                    left: l.$1,
-                    top: l.$2,
-                    child: pw.Text(
-                      l.$3,
-                      style: pw.TextStyle(fontSize: 8, color: _muted),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+        : _trendChart(values: values, color: _orange, xLabels: labels),
+  );
+}
+
+pw.Widget _cashFlowTrendSection(TrendSeries trend) {
+  final points = trend.points;
+  final values = [for (final p in points) _display(p.y)];
+  final labels = [for (final p in points) _dateLabel(p.x)];
+  return _statCard(
+    title: 'Cash Flow Trend',
+    accent: _orange,
+    subtitle: 'Net cash flow per day',
+    child: values.length < 2
+        ? _empty('No cash flow data in this period.')
+        : _trendChart(values: values, color: _blue, xLabels: labels),
   );
 }
 
 pw.Widget _balanceTrendSection(TrendSeries trend) {
   final points = trend.points;
   final values = [for (final p in points) _display(p.y)];
+  final labels = [for (final p in points) _dateLabel(p.x)];
   return _statCard(
     title: 'Balance Trend',
     accent: _orange,
-    subtitle: points.isEmpty
-        ? null
-        : '${points.length} points | ${_shortDate(points.first.x)} to '
-            '${_shortDate(points.last.x)}',
-    child: points.length < 2
+    subtitle: '${points.length} points',
+    child: values.length < 2
         ? _empty('No balance data in this period.')
-        : pw.SizedBox(
-            height: 170,
-            child: pw.Stack(
-              children: [
-                pw.Positioned.fill(
-                  child: pw.CustomPaint(
-                    size: PdfPoint(_pageWidth, 170),
-                    painter: (canvas, size) =>
-                        _paintLine(canvas, size.x, size.y, values, _blue),
-                  ),
-                ),
-                for (final l in _lineLabels(values, 170))
-                  pw.Positioned(
-                    left: l.$1,
-                    top: l.$2,
-                    child: pw.Text(
-                      l.$3,
-                      style: pw.TextStyle(fontSize: 8, color: _muted),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+        : _trendChart(values: values, color: _blue, xLabels: labels),
+  );
+}
+
+pw.Widget _savingsTrendSection(List<TrendSeries> savingsTrend) {
+  final points =
+      savingsTrend.isEmpty ? const <SeriesPoint>[] : savingsTrend.first.points;
+  final values = [for (final p in points) _display(p.y)];
+  final labels = [for (final p in points) _dateLabel(p.x)];
+  return _statCard(
+    title: 'Savings Trend',
+    accent: _green,
+    subtitle: 'Cumulative savings over time',
+    child: values.length < 2
+        ? _empty('No savings data in this period.')
+        : _trendChart(values: values, color: _green, xLabels: labels),
   );
 }
 
@@ -1144,6 +1203,7 @@ pw.Widget _budgetProgressSection(List<BudgetProgress> progress) {
 
 pw.Widget _forecastSection(List<ForecastPoint> points) {
   final values = [for (final p in points) _display(p.value)];
+  final labels = [for (final p in points) _dateLabel(p.x)];
   final firstForecast = points.indexWhere((p) => p.forecast);
   return _statCard(
     title: 'Cash Flow Forecast',
@@ -1151,22 +1211,21 @@ pw.Widget _forecastSection(List<ForecastPoint> points) {
     subtitle: points.isEmpty
         ? null
         : 'Projected daily net over the next ${points.where((p) => p.forecast).length} days',
-    child: points.length < 2
+    child: values.length < 2
         ? _empty('Not enough data to forecast.')
         : pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.SizedBox(
-                height: 170,
-                child: pw.CustomPaint(
-                  size: PdfPoint(_pageWidth, 170),
-                  painter: (canvas, size) => _paintForecast(
-                    canvas,
-                    size.x,
-                    size.y,
-                    values,
-                    firstForecast < 0 ? values.length : firstForecast,
-                  ),
+              _trendChart(
+                values: values,
+                color: _forecastActual,
+                xLabels: labels,
+                painter: (canvas, size) => _paintForecast(
+                  canvas,
+                  size.x,
+                  size.y,
+                  values,
+                  firstForecast < 0 ? values.length : firstForecast,
                 ),
               ),
               pw.SizedBox(height: 6),
@@ -1827,112 +1886,98 @@ void _strokeArc(
   canvas.strokePath();
 }
 
-String _maxBarLabel(List<GroupedBar> bars) {
-  var maxAbs = 0.0;
-  for (final b in bars) {
-    maxAbs = math.max(maxAbs, _display(b.income).abs());
-    maxAbs = math.max(maxAbs, _display(b.expense).abs());
-  }
-  return '$_code ${_num(maxAbs)} max';
-}
-
-void _paintBars(PdfGraphics canvas, double w, double h, List<GroupedBar> bars) {
-  if (bars.isEmpty) return;
-  const padL = 10.0;
-  const padR = 10.0;
-  const padT = 14.0;
-  const padB = 16.0;
-  final plotW = w - padL - padR;
-  final plotH = h - padT - padB;
-  var maxAbs = 0.0;
-  for (final b in bars) {
-    maxAbs = math.max(maxAbs, _display(b.income).abs());
-    maxAbs = math.max(maxAbs, _display(b.expense).abs());
-  }
-  if (maxAbs <= 0) return;
-  final groupW = plotW / bars.length;
-  final barW = (groupW * 0.26).clamp(2.0, 10.0);
-
-  for (var g = 1; g <= 4; g++) {
-    final y = padB + plotH * g / 4;
-    canvas
-      ..setStrokeColor(_borderGrey)
-      ..setLineWidth(0.4)
-      ..drawLine(padL, y, w - padR, y)
-      ..strokePath();
-  }
-
-  for (var i = 0; i < bars.length; i++) {
-    final income = _display(bars[i].income).abs();
-    final expense = _display(bars[i].expense).abs();
-    final cx = padL + groupW * (i + 0.5);
-    if (income > 0) {
-      final bh = (income / maxAbs) * plotH;
-      canvas
-        ..setFillColor(_green)
-        ..drawRect(cx - barW - 1, padB, barW, bh)
-        ..fillPath();
-    }
-    if (expense > 0) {
-      final bh = (expense / maxAbs) * plotH;
-      canvas
-        ..setFillColor(_red)
-        ..drawRect(cx + 1, padB, barW, bh)
-        ..fillPath();
-    }
-  }
-}
-
-void _paintLine(
+void _paintTrend(
   PdfGraphics canvas,
   double w,
   double h,
-  List<double> values,
-  PdfColor color,
-) {
-  if (values.length < 2) return;
-  final minV = values.reduce(math.min);
-  final maxV = values.reduce(math.max);
-  final range = (maxV - minV) == 0 ? 1.0 : (maxV - minV);
-  const padL = 14.0;
-  const padR = 14.0;
-  const padT = 12.0;
-  const padB = 16.0;
-  final plotW = w - padL - padR;
-  final plotH = h - padT - padB;
-
-  PdfPoint at(int i) {
-    final x = padL + plotW * (values.length == 1 ? 0.5 : i / (values.length - 1));
-    final y = padB + plotH * ((values[i] - minV) / range);
-    return PdfPoint(x, y);
+  List<double> first,
+  PdfColor color, {
+  List<double>? secondValues,
+  PdfColor? secondColor,
+}) {
+  if (first.length < 2) return;
+  final all = <double>[...first, ...?secondValues];
+  var minV = all.reduce(math.min);
+  var maxV = all.reduce(math.max);
+  if (minV == maxV) {
+    // A flat series would otherwise pin to the bottom edge and read as "0".
+    minV -= 1;
+    maxV += 1;
   }
+  final range = maxV - minV;
+  final plotW = w - _trendPadL - _trendPadR;
+  final plotH = h - _trendPadT - _trendPadB;
 
-  for (var g = 1; g <= 3; g++) {
-    final y = padB + plotH * g / 4;
+  for (var g = 0; g <= 3; g++) {
+    final y = _trendPadB + plotH * g / 3;
     canvas
       ..setStrokeColor(_borderGrey)
       ..setLineWidth(0.4)
-      ..drawLine(padL, y, w - padR, y)
+      ..drawLine(_trendPadL, y, w - _trendPadR, y)
       ..strokePath();
   }
 
-  canvas
-    ..setFillColor(PdfColor(color.red, color.green, color.blue, 0.15))
-    ..moveTo(at(0).x, padB);
-  for (var i = 0; i < values.length; i++) {
-    final p = at(i);
-    canvas.lineTo(p.x, p.y);
+  _strokeSmooth(canvas, first, color, plotW, plotH, minV, range);
+  if (secondValues != null && secondValues.length >= 2) {
+    _strokeSmooth(
+      canvas,
+      secondValues,
+      secondColor ?? color,
+      plotW,
+      plotH,
+      minV,
+      range,
+      axisLength: first.length,
+    );
   }
-  canvas.lineTo(at(values.length - 1).x, padB);
-  canvas.fillPath();
+}
+
+/// Strokes a smooth (Catmull-Rom to cubic bezier) polyline through [series]
+/// from index [from] to [to]. [axisLength] is the number of x positions along
+/// the axis (usually [series].length).
+void _strokeSmooth(
+  PdfGraphics canvas,
+  List<double> series,
+  PdfColor color,
+  double plotW,
+  double plotH,
+  double minV,
+  double range, {
+  int from = 0,
+  int? to,
+  int axisLength = 0,
+}) {
+  final nAxis = axisLength > 0 ? axisLength : series.length;
+  final end = (to ?? series.length - 1).clamp(from, series.length - 1);
+  double x(int i) => _trendPadL + plotW * (nAxis == 1 ? 0.5 : i / (nAxis - 1));
+  double y(int i) {
+    final ci = i.clamp(0, series.length - 1);
+    return _trendPadB + plotH * ((series[ci] - minV) / range);
+  }
 
   canvas
     ..setStrokeColor(color)
-    ..setLineWidth(1.2)
-    ..moveTo(at(0).x, at(0).y);
-  for (var i = 1; i < values.length; i++) {
-    final p = at(i);
-    canvas.lineTo(p.x, p.y);
+    ..setLineWidth(1.4);
+  canvas.moveTo(x(from), y(from));
+  for (var i = from; i < end; i++) {
+    final a = i - 1 < from ? from : i - 1;
+    final d = i + 2 > end ? end : i + 2;
+    final p0x = x(a);
+    final p0y = y(a);
+    final p1x = x(i);
+    final p1y = y(i);
+    final p2x = x(i + 1);
+    final p2y = y(i + 1);
+    final p3x = x(d);
+    final p3y = y(d);
+    canvas.curveTo(
+      p1x + (p2x - p0x) / 6,
+      p1y + (p2y - p0y) / 6,
+      p2x - (p3x - p1x) / 6,
+      p2y - (p3y - p1y) / 6,
+      p2x,
+      p2y,
+    );
   }
   canvas.strokePath();
 }
@@ -1945,56 +1990,48 @@ void _paintForecast(
   int firstForecast,
 ) {
   if (values.length < 2) return;
-  final minV = values.reduce(math.min);
-  final maxV = values.reduce(math.max);
-  final range = (maxV - minV) == 0 ? 1.0 : (maxV - minV);
-  const padL = 14.0;
-  const padR = 14.0;
-  const padT = 12.0;
-  const padB = 16.0;
-  final plotW = w - padL - padR;
-  final plotH = h - padT - padB;
+  var minV = values.reduce(math.min);
+  var maxV = values.reduce(math.max);
+  if (minV == maxV) {
+    minV -= 1;
+    maxV += 1;
+  }
+  final range = maxV - minV;
+  final plotW = w - _trendPadL - _trendPadR;
+  final plotH = h - _trendPadT - _trendPadB;
 
-  PdfPoint at(int i) {
-    final x = padL + plotW * (values.length == 1 ? 0.5 : i / (values.length - 1));
-    final y = padB + plotH * ((values[i] - minV) / range);
-    return PdfPoint(x, y);
+  for (var g = 0; g <= 3; g++) {
+    final y = _trendPadB + plotH * g / 3;
+    canvas
+      ..setStrokeColor(_borderGrey)
+      ..setLineWidth(0.4)
+      ..drawLine(_trendPadL, y, w - _trendPadR, y)
+      ..strokePath();
   }
 
   final solidEnd = firstForecast.clamp(1, values.length - 1);
-
-  canvas
-    ..setStrokeColor(_forecastActual)
-    ..setLineWidth(1.2)
-    ..moveTo(at(0).x, at(0).y);
-  for (var i = 1; i <= solidEnd; i++) {
-    final p = at(i);
-    canvas.lineTo(p.x, p.y);
-  }
-  canvas.strokePath();
-
+  _strokeSmooth(
+    canvas,
+    values,
+    _forecastActual,
+    plotW,
+    plotH,
+    minV,
+    range,
+    to: solidEnd,
+  );
   if (solidEnd < values.length - 1) {
-    canvas
-      ..setStrokeColor(_forecastTail)
-      ..setLineWidth(1.2)
-      ..setLineDashPattern(const [3, 3])
-      ..moveTo(at(solidEnd).x, at(solidEnd).y);
-    for (var i = solidEnd + 1; i < values.length; i++) {
-      final p = at(i);
-      canvas.lineTo(p.x, p.y);
-    }
-    canvas
-      ..strokePath()
-      ..setLineDashPattern(const []);
+    canvas.setLineDashPattern(const [3, 3]);
+    _strokeSmooth(
+      canvas,
+      values,
+      _forecastTail,
+      plotW,
+      plotH,
+      minV,
+      range,
+      from: solidEnd,
+    );
+    canvas.setLineDashPattern(const []);
   }
-}
-
-List<(double, double, String)> _lineLabels(List<double> values, double height) {
-  if (values.isEmpty) return [];
-  final minV = values.reduce(math.min);
-  final maxV = values.reduce(math.max);
-  return [
-    (14, height - 18, _num(minV)),
-    (_pageWidth - 70, height - 18, _num(maxV)),
-  ];
 }

@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/auth_service.dart';
+
 class EmailVerificationPage extends StatefulWidget {
   const EmailVerificationPage({super.key});
 
@@ -55,7 +57,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
     }
   }
 
-  Future<void> _signOut() => FirebaseAuth.instance.signOut();
+  Future<void> _signOut() => signOut();
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(

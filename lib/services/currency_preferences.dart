@@ -41,6 +41,10 @@ class CurrencyPreferences {
     final code = preferences.getString(_userCodeKey(uid));
     if (code != null && code.trim().isNotEmpty) {
       CurrencySettings.update(code: code, rates: CurrencySettings.usdRates);
+    } else {
+      // New user with no saved preference: do not inherit the previous
+      // device-wide currency (stored by hydrate()); start from USD.
+      CurrencySettings.update(code: 'USD', rates: CurrencySettings.usdRates);
     }
   }
 

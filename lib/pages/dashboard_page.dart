@@ -6,6 +6,7 @@ import 'package:pj1/analytics/models/analytics_models.dart';
 import 'package:pj1/analytics/models/stat_models.dart';
 import 'package:pj1/analytics/services/analytics_service.dart';
 import 'package:pj1/analytics/widgets/category_donut_card.dart';
+import 'package:pj1/services/auth_service.dart';
 import 'package:pj1/analytics/widgets/next_month_estimate_card.dart';
 import 'package:pj1/models/finance_models.dart';
 import 'package:pj1/pages/add_transaction_page.dart';
@@ -855,7 +856,7 @@ class _AppDrawer extends StatelessWidget {
               onTap: () async {
                 Navigator.of(context).pop();
                 if (Firebase.apps.isNotEmpty) {
-                  await FirebaseAuth.instance.signOut();
+                  await signOut();
                 }
               },
             ),

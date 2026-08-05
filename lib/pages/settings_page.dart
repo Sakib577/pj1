@@ -169,7 +169,7 @@ class _CurrencyPickerState extends State<_CurrencyPicker> {
                 autofocus: true,
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.search),
-                  hintText: 'Search ISO code, e.g. BDT',
+                  hintText: 'Search ISO code, e.g. USD',
                 ),
                 onChanged: (value) => setState(() => _query = value),
               ),

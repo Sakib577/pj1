@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import '../services/app_lock_service.dart';
+import '../services/auth_service.dart';
 import '../state/finance_app_state.dart';
 import '../widgets/pin_entry_sheet.dart';
 import 'settings_page.dart';
@@ -144,10 +145,10 @@ class ProfilePage extends StatelessWidget {
 
   Future<void> _signOut(BuildContext context) async {
     try {
-      await FirebaseAuth.instance.signOut();
-    } on FirebaseAuthException catch (error) {
+      await signOut();
+    } catch (error) {
       if (!context.mounted) return;
-      _showMessage(context, error.message ?? 'Could not sign out. Try again.');
+      _showMessage(context, 'Could not sign out. Try again.');
     }
   }
 }

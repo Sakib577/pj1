@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'pages/auth_page.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/email_verification_page.dart';
+import 'services/auth_service.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -41,7 +42,7 @@ class AuthGate extends StatelessWidget {
                     ),
                     const SizedBox(height: 24),
                     FilledButton.icon(
-                      onPressed: () => FirebaseAuth.instance.signOut(),
+                      onPressed: () => signOut(),
                       icon: const Icon(Icons.refresh),
                       label: const Text('Retry'),
                     ),

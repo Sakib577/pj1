@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -153,6 +154,221 @@ class _AuthPageState extends State<AuthPage> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
+    try {
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return;
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      await FirebaseAuth.instance.signInWithCredential(credential);
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      if (error.code == 'account-exists-with-different-credential') {
+        final email = error.email;
+        final pendingCredential = error.credential;
+        if (email != null && pendingCredential != null) {
+          try {
+            await _linkGoogleAccount(email, pendingCredential);
+          } catch (_) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Could not link your Google account. Please try again.',
+                ),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'An account already exists with this email. '
+              'Please sign in with your email and password first.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_messageFor(error)),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (_) {
+      // Google sign-in was cancelled (signIn() returns null) or the platform
+      // flow failed; show a message instead of failing silently.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Google sign-in failed. Please try again.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _linkGoogleAccount(
+    String email,
+    AuthCredential googleCredential,
+  ) async {
+    final passwordController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    var linking = false;
+    var wrongPassword = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Verify your account'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'An account already exists with this email. '
+                  'Enter its password to link your Google account.',
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: passwordController,
+                  obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  decoration: const InputDecoration(
+                    labelText: 'Existing password',
+                    prefixIcon: Icon(Icons.lock_outline),
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if ((value?.length ?? 0) < 6) {
+                      return 'Enter your account password.';
+                    }
+                    return null;
+                  },
+                ),
+                if (wrongPassword) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Incorrect password. Try again.',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: linking ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: linking
+                  ? null
+                  : () => _linkAccount(
+                      formKey,
+                      email,
+                      googleCredential,
+                      passwordController,
+                      dialogContext,
+                      (value) => setDialogState(() => linking = value),
+                      () => setDialogState(() => wrongPassword = true),
+                    ),
+              child: linking
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Link accounts'),
+            ),
+          ],
+        ),
+      ),
+    );
+    passwordController.dispose();
+  }
+
+  Future<void> _linkAccount(
+    GlobalKey<FormState> formKey,
+    String email,
+    AuthCredential googleCredential,
+    TextEditingController passwordController,
+    BuildContext dialogContext,
+    ValueChanged<bool> setLinking,
+    VoidCallback showWrongPassword,
+  ) async {
+    if (!(formKey.currentState?.validate() ?? false)) return;
+    setLinking(true);
+    try {
+      final authResult = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: passwordController.text,
+      );
+      await authResult.user?.linkWithCredential(googleCredential);
+      if (!dialogContext.mounted) return;
+      Navigator.pop(dialogContext);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Google account linked. You can now sign in with either method.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!dialogContext.mounted) return;
+      if (error.code == 'wrong-password' ||
+          error.code == 'invalid-credential' ||
+          error.code == 'invalid-login-credentials') {
+        showWrongPassword();
+        setLinking(false);
+      } else if (error.code == 'provider-already-linked') {
+        Navigator.pop(dialogContext);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Google account linked. You can now sign in with either method.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        setLinking(false);
+        ScaffoldMessenger.of(dialogContext).showSnackBar(
+          SnackBar(
+            content: Text(_messageFor(error)),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {
+      if (!dialogContext.mounted) return;
+      setLinking(false);
+      ScaffoldMessenger.of(dialogContext).showSnackBar(
+        const SnackBar(
+          content: Text('Could not link accounts. Please try again.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   String _messageFor(FirebaseAuthException error) {
     switch (error.code) {
       case 'invalid-email':
@@ -294,6 +510,40 @@ class _AuthPageState extends State<AuthPage> {
                             : Text(
                                 _creatingAccount ? 'Create Account' : 'Sign In',
                               ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        const Expanded(child: Divider()),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            _creatingAccount ? 'or sign up with' : 'or continue with',
+                            style: const TextStyle(color: Color(0xFF6B7280)),
+                          ),
+                        ),
+                        const Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: _submitting ? null : _signInWithGoogle,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF374151),
+                          side: const BorderSide(color: Color(0xFFD1D5DB)),
+                        ),
+                        icon: const Text(
+                          'G',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF4285F4),
+                          ),
+                        ),
+                        label: const Text('Continue with Google'),
                       ),
                     ),
                     const SizedBox(height: 12),

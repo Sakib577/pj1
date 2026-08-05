@@ -49,6 +49,7 @@ dependencies:
   path_provider: ^2.1.6
   share_plus: ^13.3.0
   pdf: ^3.13.0
+  google_sign_in: ^6.2.2
 
 dev_dependencies:
   flutter_test:

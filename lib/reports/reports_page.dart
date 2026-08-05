@@ -43,9 +43,9 @@ class _ReportsPageState extends State<ReportsPage> {
               children: [
                 Text(
                   'Report period',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 Flexible(
@@ -66,9 +66,9 @@ class _ReportsPageState extends State<ReportsPage> {
                           leading: const Icon(Icons.date_range_outlined),
                           title: Text(DateRange.preset(preset).label),
                           trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(sheetContext).pop(
-                            DateRange.preset(preset),
-                          ),
+                          onTap: () => Navigator.of(
+                            sheetContext,
+                          ).pop(DateRange.preset(preset)),
                         ),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
@@ -489,10 +489,7 @@ class _ReportDetailPage extends StatelessWidget {
               ),
             ),
             ReportKind.budgetVsActual => _BudgetVsActualView(
-              report: _service.calculateBudgetVsActual(
-                state.budgets,
-                txns,
-              ),
+              report: _service.calculateBudgetVsActual(state.budgets, txns),
             ),
             ReportKind.debt => _DebtReportView(
               report: _service.calculateDebtReport(state.debts),
@@ -859,7 +856,8 @@ class _DebtReportView extends StatelessWidget {
           color: report.netPosition < 0
               ? const Color(0xFFDC2626)
               : const Color(0xFF16A34A),
-          subtitle: 'Owed: ${formatCurrency(report.totalBorrowed)} · '
+          subtitle:
+              'Owed: ${formatCurrency(report.totalBorrowed)} · '
               'Owed to you: ${formatCurrency(report.totalLent)}',
         ),
         const SizedBox(height: 12),
@@ -882,7 +880,8 @@ class _DebtReportView extends StatelessWidget {
             emptyMessage: 'No active loans to others',
           ),
         ),
-        if (report.borrowedSettled.isNotEmpty || report.lentSettled.isNotEmpty) ...[
+        if (report.borrowedSettled.isNotEmpty ||
+            report.lentSettled.isNotEmpty) ...[
           const SizedBox(height: 12),
           _StatementCard(
             title: 'Settled',
@@ -897,10 +896,7 @@ class _DebtReportView extends StatelessWidget {
                   ),
                 if (report.lentSettled.isNotEmpty) ...[
                   const Divider(height: 1),
-                  ReportLineList(
-                    items: report.lentSettled,
-                    emptyMessage: '',
-                  ),
+                  ReportLineList(items: report.lentSettled, emptyMessage: ''),
                 ],
               ],
             ),
@@ -1291,11 +1287,7 @@ class _SavingsGoalCard extends StatelessWidget {
 }
 
 class _MiniValue extends StatelessWidget {
-  const _MiniValue({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
+  const _MiniValue({required this.label, required this.value, this.valueColor});
 
   final String label;
   final String value;

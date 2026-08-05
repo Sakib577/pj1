@@ -56,6 +56,103 @@ class _AuthPageState extends State<AuthPage> {
     }
   }
 
+  Future<void> _showForgotPasswordDialog() async {
+    final emailController = TextEditingController(text: _emailController.text);
+    final formKey = GlobalKey<FormState>();
+    var sending = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Reset password'),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: emailController,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.done,
+              autofillHints: const [AutofillHints.email],
+              decoration: const InputDecoration(
+                labelText: 'Email address',
+                prefixIcon: Icon(Icons.email_outlined),
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                final email = value?.trim() ?? '';
+                if (email.isEmpty || !email.contains('@')) {
+                  return 'Enter a valid email address.';
+                }
+                return null;
+              },
+              onFieldSubmitted: (_) => _sendResetLink(
+                formKey,
+                emailController,
+                dialogContext,
+                (value) => setDialogState(() => sending = value),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: sending ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: sending
+                  ? null
+                  : () => _sendResetLink(
+                      formKey,
+                      emailController,
+                      dialogContext,
+                      (value) => setDialogState(() => sending = value),
+                    ),
+              child: sending
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Send reset link'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendResetLink(
+    GlobalKey<FormState> formKey,
+    TextEditingController emailController,
+    BuildContext dialogContext,
+    ValueChanged<bool> setSending,
+  ) async {
+    if (!(formKey.currentState?.validate() ?? false)) return;
+    setSending(true);
+    try {
+      await FirebaseAuth.instance
+          .sendPasswordResetEmail(email: emailController.text.trim());
+      if (!dialogContext.mounted) return;
+      Navigator.pop(dialogContext);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password reset link sent. Check your email.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!dialogContext.mounted) return;
+      setSending(false);
+      ScaffoldMessenger.of(dialogContext).showSnackBar(
+        SnackBar(
+          content: Text(_messageFor(error)),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   String _messageFor(FirebaseAuthException error) {
     switch (error.code) {
       case 'invalid-email':
@@ -164,7 +261,19 @@ class _AuthPageState extends State<AuthPage> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 24),
+                    if (!_creatingAccount) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _submitting
+                              ? null
+                              : _showForgotPasswordDialog,
+                          child: const Text('Forgot password?'),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
                     SizedBox(
                       height: 52,
                       child: ElevatedButton(

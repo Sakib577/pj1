@@ -9,11 +9,56 @@ per-user categories synced to Firestore, and transactions / planned payments /
 debts / shopping-list items persisted to Firestore with live snapshot sync. Local
 Android notifications remind about upcoming planned payments two days before, one
 day before, and on the due day. Budgets and savings goals are persisted to
-Firestore and support editing.
+Firestore and support editing. On top of tracking, the app has a full Analytics
+module (Statistics page with adaptive line/donut/gauge charts) and a Reports
+module that computes formal accounting statements and exports them to vector PDF
+or CSV, shared from the device.
 
 Recent implementation notes (August 2026)
-------------------------------------------
+-----------------------------------------
 - Budgets support create, edit, delete, repeating periods, and Firestore persistence.
+- Analytics module (lib/analytics/): a self-contained Statistics page reached from
+  the dashboard drawer. All computation lives in the pure analytics_service.dart;
+  chart widgets are thin wrappers around fl_chart (wrapped so the library can be
+  swapped). Data is read ONLY from the already-synced in-memory FinanceAppState
+  (never Firestore directly, never mock data). No new state-management package:
+  StatisticsController (ChangeNotifier) + the existing FinanceAppScope pattern.
+- The Trends card (lib/analytics/widgets/trends_card.dart) is a dropdown-driven
+  line chart covering spending, income vs expense, cash flow, savings trend, and
+  balance history. Income-vs-expense and spending trends render as LINE charts
+  (not bars) so short windows show real curves instead of isolated dots.
+  Bucket granularity is adaptive to the window length (<=45d daily, <=180d
+  weekly, else monthly) mirroring calculateSavingsTrend, so a single-month window
+  never collapses to two dots.
+- The cash-flow net line is painted LAST (drawn on top of income/expense) in pure
+  black (0xFF000000) with a slightly wider stroke, for instant readability.
+- calculateSavingsTrend sums contributions (negative transactions whose category
+  is a savings goal) so "Savings Trend" reflects money actually moved into goals.
+- calculateCashFlowForecast is continuous: the actuals look-back ends at the last
+  transaction date and the forecast starts on the following day (no gap).
+- formatCurrencyNoCents converts then rounds, fixing an off-by-display bug where
+  large converted amounts (e.g. 500 BDT) could render with trailing digits.
+- Savings transactions carry idPrefix 'savings-{goal.id}' and deleteTransaction
+  reverts the goal balance when such a linked transaction is deleted.
+- Reports module (lib/reports/): read-only accounting engine (report_service.dart)
+  classifying every transaction into operating/investing/financing for a formal
+  Cash Flow Statement, plus Income Statement (P&L), Balance Sheet (cash + savings
+  + money lent vs money borrowed = net worth), Budget vs Actual, Debt Report, and
+  Savings & Net Worth. Reports page has a preset/custom period picker.
+- PDF export (lib/utils/pdf_export.dart) renders VECTOR charts (custom CustomPaint
+  via pw.PdfGraphics). The trend chart is sized by pw.LayoutBuilder to the actual
+  card content width (fallback _pageWidth) so PDF graphs never overflow into
+  adjacent text; flat series (minV==maxV) expand to avoid invisible plots. CSV
+  export (lib/utils/csv_export.dart) is RFC 4180 with amounts converted to the
+  user's display currency. Exports are shared via share_plus; paths come from
+  path_provider. Verified locally by rendering PDF->PNG (pdftoppm) + PIL pixel
+  analysis; temp render tests are deleted after use.
+- GroupedBar gained an optional date field (bucket start) populated by
+  calculateIncomeExpenseComparison so income/expense can render as time-series.
+- fl_chart tooltip builder now passes spot.barIndex instead of a hardcoded 0.
+- Statistics page cards: Trends (dropdown), Cash Flow Summary, Category Donut,
+  Spending Pattern, Top Expenses, Debt-to-Income gauge, Monthly Overview, Income
+  Analytics, Budget Progress, Cash Flow Forecast, Next-Month Estimate.
 - Savings is the renamed Savings Goals page. Goals support create, edit, delete,
   add funds, withdraw funds, Firestore persistence, and Active/Completed sections.
   Withdrawals are bounded by the current balance and recorded as reversal/income
@@ -153,6 +198,28 @@ Important files
   needsConfirmation flag. DebtItem uses a DebtSettlement enum (active/closed/repaid)
   so repaid vs forgiven/closed records stay distinct, and ShoppingItem (subcategory,
   done flag, price) are simple in-memory models.
+- lib/analytics/: Statistics module (engine + widgets). Key entry points:
+  lib/pages/statistics_page.dart (screen), lib/analytics/services/analytics_service.dart
+  (pure computation engine), lib/analytics/providers/statistics_controller.dart
+  (ChangeNotifier for the active DateRange + cached StatisticsBundle),
+  lib/analytics/charts/ (fl_chart wrappers: stat_line_chart, stat_bar_chart,
+  stat_donut_chart, stat_circular_gauge, chart_tooltip, chart_theme),
+  lib/analytics/widgets/ (stat cards incl. trends_card.dart with the dropdown
+  line chart and adaptive granularity), lib/analytics/models/
+  (DTOs incl. GroupedBar.date), lib/analytics/utils/date_ranges.dart
+  (presets + windowing).
+- lib/reports/: Reports module. lib/reports/reports_page.dart (list + detail UI
+  with preset/custom period picker), lib/reports/services/report_service.dart
+  (pure accounting engine for Cash Flow / Income Statement / Balance Sheet /
+  Budget vs Actual / Debt / Savings & Net Worth), lib/reports/models/report_models.dart
+  (ReportKind enum + DTOs), lib/reports/widgets/ (report_line_list,
+  statement_section_card).
+- lib/utils/pdf_export.dart: vector PDF report export. Trend/forecast charts are
+  custom-painted via pw.PdfGraphics and sized with pw.LayoutBuilder to the card
+  content width (fallback _pageWidth) so they never overflow into text; flat
+  series expand to stay visible. Uses path_provider + share_plus.
+- lib/utils/csv_export.dart: RFC 4180 CSV of all transactions (oldest first),
+  amounts converted to the display currency.
 - lib/utils/currency_settings.dart: current display currency and loaded rates.
   The selected code is kept even when the loaded rates map does not yet contain it
   (it defaults to rate 1 until live FX rates arrive). This is what makes the
@@ -198,8 +265,9 @@ Current behavior
 - A verified user can sign in, view the dashboard, add a transaction, and
   sign out.
 - The dashboard has four bottom tabs (Home, Budgets, Savings, Profile) plus a
-  side drawer with Dashboard, Categories, Planned Payments, Debts, Shopping List,
-  Budgets, Savings, Profile & Settings, Currency Converter, and Export Report.
+  side drawer with Dashboard, Categories, Statistics, Reports, Planned Payments,
+  Debts, Shopping List, Budgets, Savings, Profile & Settings, Currency Converter,
+  and Export Report.
   The "View All" links on Recent Transactions and Planned Payments open dedicated
   pages. Several buttons (notifications, more options) only show placeholder
   snackbars.
@@ -292,9 +360,22 @@ Current behavior
   PaymentReminderService.
 - Budgets and Savings tabs create, edit, delete, and persist their records. Savings
   also supports adding/withdrawing funds and Active/Completed goal sections.
-- The report feature copies a plain-text report to the clipboard. Add a real
-  CSV/PDF download once report records are persisted.
-
+- The Statistics page (drawer) shows a scrollable set of analytics cards over a
+  user-chosen date range (today / last 7 / last 30 / this month / last month /
+  custom). The Trends card is a dropdown-driven line chart (spending, income vs
+  expense, cash flow with black net line drawn on top, savings trend, balance
+  history) whose bucket granularity adapts to the window length so short windows
+  show full curves, not isolated dots. Other cards cover category donut, spending
+  pattern, top expenses, debt-to-income, monthly overview, income analytics,
+  budget progress, cash-flow forecast, and next-month estimate.
+- The Reports page (drawer) lists six formal statements computed by
+  report_service.dart from the in-memory transactions/debts/goals/budgets:
+  Cash Flow Statement (operating/investing/financing + beginning/ending cash),
+  Income Statement (P&L with gross margin), Balance Sheet (net worth), Budget vs
+  Actual, Debt Report, and Savings & Net Worth. Each can be exported as a vector
+  PDF (charts custom-painted, width-bounded so nothing overflows the page) or as
+  an RFC 4180 CSV, and shared via the platform share sheet. Reports are read-only
+  and never write to Firestore.
 Recommended next work
 ---------------------
 1. Refactor TransactionItem into a serializable Transaction model stored as integer
@@ -319,6 +400,11 @@ Recommended next work
    permissions, dialog flows, and offline behavior.
 7. Add password reset, resend-email cooldown, account deletion, error telemetry, and
    App Check before production release.
+8. Analytics/reports polish: dark-mode chart palette (currently light theme only),
+   add chart illustrations to the other PDF statements (only the trend/forecast
+   charts are drawn), and persist report period selections. The Trends card's
+   adaptive default granularity is verified via unit tests; device smoke tests for
+   PDF overflow on real phones are still the user's job.
 
 Development notes
 -----------------

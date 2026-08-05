@@ -46,6 +46,7 @@ Faculty of Computer Science and Engineering
 2. [Introduction & Abstract](#2-introduction--abstract)
 3. [Objectives](#3-objectives)
 4. [Scope](#4-scope)
+   - 4.4 [Analytics & Reporting Overview](#44-analytics--reporting-overview)
 5. [System Analysis & Design](#5-system-analysis--design)
    - 5.1 [Use Case Diagram](#51-use-case-diagram)
    - 5.2 [Activity Diagram](#52-activity-diagram)
@@ -85,6 +86,8 @@ The system implements a secure, role-less (single-user) model with cloud synchro
 
 The application supports multi-currency display with real-time exchange rates, ensuring usability across different geographical regions. All financial data is stored securely in Firebase Firestore with client-side encryption for sensitive fields, and the app maintains full functionality even when offline through Firestore's offline persistence layer.
 
+Beyond day-to-day tracking, the app includes a dedicated **Analytics** module — a statistics dashboard with line, donut, and gauge charts driven by `fl_chart` — and a **Reports** module that computes formal accounting statements (Cash Flow Statement, Income Statement, Balance Sheet, Budget vs Actual, Debt, and Savings & Net Worth). Every report and the full transaction history can be exported to **vector PDF** and **CSV** and shared directly from the device.
+
 ---
 
 ## 3. Objectives
@@ -107,6 +110,8 @@ To develop a secure, intuitive, and feature-rich personal finance management mob
 | F8 | Multi-Currency Support | View financial data in multiple currencies with real-time exchange rates |
 | F9 | Biometric App Lock | Secure the application with device biometrics (fingerprint/face) and PIN fallback |
 | F10 | Financial Analytics Dashboard | Visual dashboard with summary cards, charts, and financial health indicators |
+| F11 | Financial Reporting | Generate formal statements (Cash Flow, Income Statement, Balance Sheet, Budget vs Actual, Debt, Savings & Net Worth) for a selectable period |
+| F12 | PDF & CSV Export | Export reports and transaction history as vector PDF or CSV and share them from the device |
 
 ### 3.3 Non-Functional Objectives
 
@@ -134,6 +139,9 @@ To develop a secure, intuitive, and feature-rich personal finance management mob
 - Multi-currency support with exchange rates
 - Biometric app-lock security
 - Financial dashboard with summary analytics
+- Statistics page with trend, cash-flow, category, spending-pattern, and forecast charts
+- Formal report generation (Cash Flow Statement, Income Statement, Balance Sheet, Budget vs Actual, Debt, Savings & Net Worth)
+- PDF (vector) and CSV export with on-device sharing
 - Firebase cloud synchronization
 - Offline-first architecture with local persistence
 
@@ -156,6 +164,18 @@ To develop a secure, intuitive, and feature-rich personal finance management mob
 | Windows | Supported |
 | macOS | Supported |
 | Linux | Supported |
+
+### 4.4 Analytics & Reporting Overview
+
+**Analytics (Statistics page)** — a scrollable dashboard of cards over a user-selected date range (today, last 7/30 days, this month, last month, custom picker). The **Trends card** is a dropdown-driven line chart that renders spending, income vs expense, cash flow, savings trend, and balance history as multi-series time-series lines. It adapts its bucket granularity to the window length (daily for short windows, weekly for medium, monthly for long) so curves stay smooth instead of collapsing into isolated dots. The cash-flow net line is drawn last (topmost) in black for instant readability. Additional cards cover category spending (donut), spending pattern, top expenses, debt-to-income gauge, monthly overview, income analytics, budget progress, a continuous cash-flow forecast (actuals look-back ends at the last transaction, forecast continues from the next day), and next-month expense estimates.
+
+**Reports** — a read-only module that classifies every transaction into standard accounting activities and renders formal statements:
+- **Cash Flow Statement** split into Operating, Investing, and Financing activities with beginning/ending cash.
+- **Income Statement (P&L)** with income, expenses, net income, and gross margin.
+- **Balance Sheet** combining cash, savings goals, money lent (assets) and money borrowed (liabilities) into net worth.
+- **Budget vs Actual**, **Debt Report**, and **Savings & Net Worth** variance and progress views.
+
+All charts are rendered as **vector graphics** (custom `CustomPaint` in PDF) whose width is bounded to the card content area, so exported PDFs never overflow into adjacent text. Export options produce a **vector PDF** or an **RFC 4180 CSV** (amounts converted to the user's display currency) shareable via the platform share sheet.
 
 ---
 
@@ -1052,6 +1072,11 @@ firebaseCLI --> firestore : "Deploy Indexes"
 | **Biometrics** | local_auth | ^2.3.0 | Fingerprint and face authentication for app lock |
 | **Encryption** | crypto | ^3.0.3 | SHA-256 hashing for PIN storage and data integrity |
 | **HTTP Client** | http | ^1.6.0 | REST API calls for exchange rate fetching |
+| **Charts** | fl_chart | ^1.2.0 | Line, bar, donut, and gauge charts for the analytics dashboard |
+| **PDF Generation** | pdf | ^3.13.0 | Client-side vector PDF generation for report export |
+| **File Sharing** | share_plus | ^13.3.0 | Native share sheet for exported PDF and CSV files |
+| **File Paths** | path_provider | ^2.1.6 | Temporary/documents directory access for exported files |
+| **Formatting** | intl | ^0.20.3 | Number and date formatting, currency symbols |
 | **State Management** | ChangeNotifier (built-in) | — | Lightweight, no external dependency, sufficient for app scope |
 | **Version Control** | Git + GitHub | — | Industry standard for source code management |
 
@@ -1118,6 +1143,9 @@ The **Expense Tracker & Personal Finance Manager** successfully delivers a compr
 - ✅ **Shopping list management** for organized purchasing
 - ✅ **Multi-currency support** with live exchange rates
 - ✅ **Biometric app-lock** for enhanced security
+- ✅ **Analytics dashboard** with adaptive line, donut, and gauge charts and cash-flow forecasting
+- ✅ **Formal financial reporting** with Cash Flow Statement, Income Statement, Balance Sheet, and more
+- ✅ **PDF and CSV export** with on-device sharing
 - ✅ **Offline-first architecture** ensuring functionality without internet
 - ✅ **Cross-platform deployment** across 6 platforms from a single codebase
 
@@ -1125,10 +1153,9 @@ The application adheres to modern software engineering practices including Agile
 
 Future enhancements planned for version 2.0 include:
 - Bank account integration via Open Banking APIs
-- Advanced financial analytics with AI-powered insights
+- AI-powered financial insights on top of the existing analytics data
 - Family/group budget sharing
 - Investment portfolio tracking
-- Export reports to PDF/CSV
 - Dark mode support
 
 ---

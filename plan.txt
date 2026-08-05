@@ -11,6 +11,35 @@ This file is a phased plan only — no code is implemented yet. Work will be spl
 into small one-at-a-time tasks; each task is implemented and verified (analyze +
 tests) before the next begins.
 
+>>> STATUS (Aug 2026): The Statistics module is COMPLETE and shipped. All 20
+>>> statistics are implemented, reachable from the dashboard drawer
+>>> ("Statistics"), and covered by `flutter analyze` (clean) + unit/widget tests.
+>>> A follow-on Reports module (formal accounting statements) and vector-PDF +
+>>> CSV export were also built. Deviations from this plan:
+>>>  - Spending Trend and Income-vs-Expense render as LINE charts (not bars), and
+>>>    the cash-flow net line is black and drawn on top — see TrendsCard in
+>>>    lib/analytics/widgets/trends_card.dart.
+>>>  - Bucket granularity is ADAPTIVE to the window length (<=45d daily, <=180d
+>>>    weekly, else monthly) instead of a fixed user control, so short windows
+>>>    draw full curves rather than isolated dots (statistics_page.dart
+>>>    `_defaultGranularity`, mirrors calculateSavingsTrend).
+>>>  - Savings Trend counts goal CONTRIBUTIONS (negative transactions linked to a
+>>>    savings goal via idPrefix 'savings-{goal.id}'); deleting such a transaction
+>>>    reverts the goal balance.
+>>>  - Cash Flow Forecast is continuous (actuals look-back ends at the last
+>>>    transaction, forecast starts next day).
+>>>  - PDF export (lib/utils/pdf_export.dart) uses pw.LayoutBuilder to size the
+>>>    trend chart to the card content width so graphs never overflow the page;
+>>>    flat series (minV==maxV) expand to stay visible. Export verified by
+>>>    rendering PDF->PNG + pixel analysis (temp tests deleted after use).
+>>>  - The planned dark-mode / ThemeService (section 8) was NOT built — the app
+>>>    is light-theme only; chart colors are resolved from the light palette.
+>>>  - fl_chart is used behind wrapper widgets as planned. GroupedBar carries an
+>>>    optional date (bucket start) to support time-series line rendering.
+>>>  - The Reports module (lib/reports/) + utils/pdf_export.dart + utils/csv_export.dart
+>>>    were out of scope of this plan but are the current export/reporting layer;
+>>>    device builds/smoke tests for PDF rendering remain the user's job.
+
 --------------------------------------------------------------------------------
 1. EXISTING ARCHITECTURE (what we build on)
 --------------------------------------------------------------------------------

@@ -5,10 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../analytics/repositories/analytics_repository.dart';
+import '../analytics/utils/date_ranges.dart';
 import '../state/finance_app_state.dart';
 import '../utils/csv_export.dart';
 import '../utils/currency_formatters.dart';
 import '../utils/currency_settings.dart';
+import '../utils/pdf_export.dart';
 import 'settings_page.dart';
 
 enum FinanceTool { converter, report }
@@ -197,7 +200,173 @@ class _FinanceToolsPageState extends State<FinanceToolsPage> {
             icon: const Icon(Icons.file_download_outlined),
             label: const Text('Export CSV'),
           ),
+          const Divider(height: 40),
+          const Text(
+            'Export PDF',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Save the statistics graphs or the accounting reports as a PDF.',
+            style: TextStyle(color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => _exportPdf(state),
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            label: const Text('Export PDF'),
+          ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _exportPdf(FinanceAppState state) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Export PDF',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.bar_chart_rounded),
+                  title: const Text('Export statistics'),
+                  subtitle: const Text('Charts and insights for this month'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(sheetContext).pop('statistics'),
+                ),
+                const SizedBox(height: 4),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text('Export reports'),
+                  subtitle: const Text('All six accounting reports'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(sheetContext).pop('reports'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case 'statistics':
+        await _exportStatisticsPdf(state);
+      case 'reports':
+        await _exportReportsPdf(state);
+    }
+  }
+
+  Future<void> _exportStatisticsPdf(FinanceAppState state) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _withLoading(
+        () async {
+          final now = DateTime.now();
+          final window = buildWindowFromDateRange(now: now);
+          final bundle = const AnalyticsRepository().bundleFor(state, window);
+          final bytes = await buildStatisticsPdf(bundle: bundle, now: now);
+          await _shareBytes(bytes, 'expense_tracker_statistics');
+        },
+      );
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Statistics PDF exported.')),
+      );
+    } catch (_) {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Could not export the statistics PDF.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _exportReportsPdf(FinanceAppState state) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _withLoading(
+        () async {
+          final now = DateTime.now();
+          final start = DateTime(now.year, now.month, 1);
+          final bytes = await buildReportsPdf(
+            state: state,
+            start: start,
+            end: now,
+            rangeLabel: 'This month',
+            now: now,
+          );
+          await _shareBytes(bytes, 'expense_tracker_reports');
+        },
+      );
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Reports PDF exported.')),
+      );
+    } catch (_) {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Could not export the reports PDF.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _withLoading(Future<void> Function() action) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Dialog(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 16),
+              Text('Generating PDF…'),
+            ],
+          ),
+        ),
+      ),
+    );
+    try {
+      await action();
+    } finally {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+
+  Future<void> _shareBytes(Uint8List bytes, String fileName) async {
+    final dir = await getTemporaryDirectory();
+    final now = DateTime.now();
+    final file = File(
+      '${dir.path}/${fileName}_${now.year.toString().padLeft(4, '0')}'
+      '${now.month.toString().padLeft(2, '0')}'
+      '${now.day.toString().padLeft(2, '0')}.pdf',
+    );
+    await file.writeAsBytes(bytes);
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'application/pdf')],
+        subject: fileName,
       ),
     );
   }

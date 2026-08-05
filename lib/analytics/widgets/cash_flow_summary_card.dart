@@ -49,6 +49,8 @@ class CashFlowSummaryCard extends StatelessWidget {
             net: summary.net,
           ),
           const SizedBox(height: 16),
+          const _ProgressHeader(),
+          const SizedBox(height: 8),
           _ProgressRow(
             label: 'Income',
             amount: summary.income,
@@ -72,11 +74,39 @@ class CashFlowSummaryCard extends StatelessWidget {
                 ? 0
                 : (summary.net.abs() / maxValue).clamp(0, 1),
             color: palette.net,
-            delta: 0,
-            deltaLabel: 'saved',
+            delta: summary.netVsPrevious,
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Column headers for the progress rows, aligned with [_ProgressRow].
+class _ProgressHeader extends StatelessWidget {
+  const _ProgressHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = theme.textTheme.labelSmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+      fontWeight: FontWeight.w700,
+    );
+    return Row(
+      children: [
+        const SizedBox(width: 64),
+        const Expanded(child: SizedBox()),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 84,
+          child: Text('Amount', textAlign: TextAlign.right, style: style),
+        ),
+        SizedBox(
+          width: 52,
+          child: Text('vs prev', textAlign: TextAlign.right, style: style),
+        ),
+      ],
     );
   }
 }
@@ -88,7 +118,6 @@ class _ProgressRow extends StatelessWidget {
     required this.ratio,
     required this.color,
     required this.delta,
-    this.deltaLabel,
   });
 
   final String label;
@@ -96,7 +125,6 @@ class _ProgressRow extends StatelessWidget {
   final double ratio;
   final Color color;
   final double delta;
-  final String? deltaLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -137,10 +165,10 @@ class _ProgressRow extends StatelessWidget {
           ),
         ),
         SizedBox(
-          width: 42,
+          width: 52,
           child: Text(
             delta == 0
-                ? (deltaLabel ?? '—')
+                ? '—'
                 : '${delta > 0 ? '+' : ''}${delta.toStringAsFixed(0)}%',
             textAlign: TextAlign.right,
             style: theme.textTheme.labelSmall?.copyWith(

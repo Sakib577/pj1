@@ -139,6 +139,7 @@ class AnalyticsService {
       saved: curIncome - curExpense,
       incomeVsPrevious: _delta(curIncome, prevIncome),
       expenseVsPrevious: _delta(curExpense, prevExpense),
+      netVsPrevious: _delta(curIncome - curExpense, prevIncome - prevExpense),
     );
   }
 

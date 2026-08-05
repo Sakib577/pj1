@@ -723,6 +723,8 @@ pw.Widget _cashFlowSection(CashFlowSummary summary, String rangeLabel) {
           ],
         ),
         pw.SizedBox(height: 14),
+        _progressHeader(),
+        pw.SizedBox(height: 8),
         _progressRow(
           label: 'Income',
           amount: _display(summary.income),
@@ -744,10 +746,45 @@ pw.Widget _cashFlowSection(CashFlowSummary summary, String rangeLabel) {
           amount: _display(summary.net),
           ratio: maxValue == 0 ? 0 : (summary.net.abs() / maxValue).clamp(0, 1),
           color: _blue,
-          deltaLabel: 'saved',
+          delta: summary.netVsPrevious,
         ),
       ],
     ),
+  );
+}
+
+pw.Widget _progressHeader() {
+  return pw.Row(
+    children: [
+      pw.SizedBox(width: 62),
+      pw.Expanded(child: pw.SizedBox()),
+      pw.SizedBox(width: 10),
+      pw.SizedBox(
+        width: 82,
+        child: pw.Text(
+          'Amount',
+          textAlign: pw.TextAlign.right,
+          style: pw.TextStyle(
+            fontSize: 8,
+            fontWeight: pw.FontWeight.bold,
+            color: _slate,
+          ),
+        ),
+      ),
+      pw.SizedBox(width: 36),
+      pw.SizedBox(
+        width: 40,
+        child: pw.Text(
+          'vs prev',
+          textAlign: pw.TextAlign.right,
+          style: pw.TextStyle(
+            fontSize: 8,
+            fontWeight: pw.FontWeight.bold,
+            color: _slate,
+          ),
+        ),
+      ),
+    ],
   );
 }
 

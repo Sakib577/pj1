@@ -12,6 +12,7 @@ class CashFlowSummary {
     required this.saved,
     required this.incomeVsPrevious,
     required this.expenseVsPrevious,
+    required this.netVsPrevious,
   });
 
   final double income;
@@ -20,6 +21,7 @@ class CashFlowSummary {
   final double saved;
   final double incomeVsPrevious;
   final double expenseVsPrevious;
+  final double netVsPrevious;
 }
 
 /// Eight headline figures shown on the Monthly Overview card.

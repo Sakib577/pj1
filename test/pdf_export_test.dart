@@ -56,6 +56,7 @@ void main() {
         saved: 100,
         incomeVsPrevious: 0,
         expenseVsPrevious: 0,
+        netVsPrevious: 0,
       ),
       cashFlowTrend: TrendSeries(
         points: const [],
@@ -170,6 +171,7 @@ void main() {
           saved: 0,
           incomeVsPrevious: 0,
           expenseVsPrevious: 0,
+          netVsPrevious: 0,
         ),
         cashFlowTrend: TrendSeries(points: const [], current: 0, previous: 0),
         categorySpending: const [],

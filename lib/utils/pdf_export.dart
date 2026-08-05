@@ -764,31 +764,39 @@ pw.Widget _trendChart({
             secondValues: secondValues,
             secondColor: secondColor,
           );
-  return pw.SizedBox(
-    height: height,
-    child: pw.Stack(
-      children: [
-        pw.CustomPaint(size: PdfPoint(_pageWidth, height), painter: paint),
-        pw.Positioned(
-          left: _trendPadL,
-          top: 0,
-          child: pw.Text(
-            '$_code ${_num(maxV)}',
-            style: pw.TextStyle(fontSize: 7, color: _muted),
-          ),
-        ),
-        if (xLabels != null)
-          for (final i in indices.toList()..sort())
+  // The canvas must match the actual content width of the card, otherwise a
+  // fixed size overflows the card and the chart runs over surrounding text.
+  return pw.LayoutBuilder(
+    builder: (context, constraints) {
+      final maxW = constraints?.maxWidth ?? _pageWidth;
+      final width = maxW.isFinite && maxW > 0 ? maxW : _pageWidth;
+      return pw.SizedBox(
+        height: height,
+        child: pw.Stack(
+          children: [
+            pw.CustomPaint(size: PdfPoint(width, height), painter: paint),
             pw.Positioned(
-              left: _trendX(i, n, _pageWidth) - 14,
-              top: height - 13,
+              left: _trendPadL,
+              top: 0,
               child: pw.Text(
-                _sanitize(xLabels[i]),
+                '$_code ${_num(maxV)}',
                 style: pw.TextStyle(fontSize: 7, color: _muted),
               ),
             ),
-      ],
-    ),
+            if (xLabels != null)
+              for (final i in indices.toList()..sort())
+                pw.Positioned(
+                  left: _trendX(i, n, width) - 14,
+                  top: height - 13,
+                  child: pw.Text(
+                    _sanitize(xLabels[i]),
+                    style: pw.TextStyle(fontSize: 7, color: _muted),
+                  ),
+                ),
+          ],
+        ),
+      );
+    },
   );
 }
 

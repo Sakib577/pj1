@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../utils/currency_formatters.dart';
 import '../charts/chart_theme.dart';
-import '../charts/stat_bar_chart.dart';
 import '../charts/stat_line_chart.dart';
 import '../models/stat_models.dart';
 import '../utils/date_ranges.dart';
@@ -41,6 +40,7 @@ class TrendsCard extends StatefulWidget {
     required this.savingsSeries,
     required this.savingsGoal,
     required this.historyByRange,
+    this.defaultGranularity = BucketGranularity.monthly,
     this.rangeLabel,
   });
 
@@ -58,6 +58,11 @@ class TrendsCard extends StatefulWidget {
   final List<TrendSeries> savingsSeries;
   final double? savingsGoal;
   final Map<BalanceHistoryRange, List<SeriesPoint>> historyByRange;
+
+  /// Initial granularity for the Income vs Expense view. Adapted to the window
+  /// length by the caller so short windows render a full curve instead of a
+  /// single monthly dot.
+  final BucketGranularity defaultGranularity;
   final String? rangeLabel;
 
   @override
@@ -68,7 +73,7 @@ class _TrendsCardState extends State<TrendsCard> {
   TrendsView _view = TrendsView.balance;
   BucketGranularity _spendingGranularity = BucketGranularity.daily;
   _CashFlowMode _cashFlowMode = _CashFlowMode.trend;
-  BucketGranularity _granularity = BucketGranularity.monthly;
+  late BucketGranularity _granularity = widget.defaultGranularity;
   BalanceHistoryRange _historyRange = BalanceHistoryRange.month;
 
   Widget? get _subMode {
@@ -247,18 +252,19 @@ class _SpendingContent extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              StatBarChart(
-                groups: [
-                  for (final p in points)
-                    StatBarGroup(
-                      label: p.x.day.toString(),
-                      rods: [
-                        StatBarRod(value: p.y, color: palette.expense),
-                      ],
-                    ),
-                ],
-                height: 160,
+              StatLineChart(
+                series: [points],
+                seriesColors: [palette.expense],
+                isFilled: true,
                 showTooltip: true,
+                tooltipBuilder: (point, _) =>
+                    formatCurrencyNoCents(point.y),
+                xLabelBuilder: switch (granularity) {
+                  BucketGranularity.daily => (d) => '${d.day}',
+                  BucketGranularity.weekly => (d) => 'W${d.day}',
+                  BucketGranularity.monthly => (d) => _mon(d.month),
+                },
+                height: 160,
               ),
             ],
           );
@@ -300,7 +306,14 @@ class _CashFlowContent extends StatelessWidget {
               _series((b) => b.expense),
               _series((b) => b.net),
             ],
-            seriesColors: [palette.income, palette.expense, palette.net],
+            // Net is the last series so fl_chart draws it on top of income and
+            // expense; a black stroke keeps it visually dominant.
+            seriesColors: [
+              palette.income,
+              palette.expense,
+              const Color(0xFF000000),
+            ],
+            barWidths: const [2.5, 2.5, 3.2],
             height: 160,
             showTooltip: true,
             tooltipBuilder: (point, index) => switch (index) {
@@ -317,6 +330,14 @@ class _IncomeVsExpenseContent extends StatelessWidget {
 
   final List<GroupedBar> bars;
 
+  List<SeriesPoint> _series(double Function(GroupedBar b) valueOf) => [
+    for (var i = 0; i < bars.length; i++)
+      SeriesPoint(
+        x: bars[i].date ?? DateTime(2026, 1, 1).add(Duration(days: i)),
+        y: valueOf(bars[i]),
+      ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final palette = ChartPalette.of(context);
@@ -325,19 +346,16 @@ class _IncomeVsExpenseContent extends StatelessWidget {
             height: 120,
             child: Center(child: Text('No transactions in this period')),
           )
-        : StatBarChart(
-            groups: [
-              for (final b in bars)
-                StatBarGroup(
-                  label: b.label,
-                  rods: [
-                    StatBarRod(value: b.income, color: palette.income, label: 'In'),
-                    StatBarRod(value: b.expense, color: palette.expense, label: 'Out'),
-                  ],
-                ),
-            ],
+        : StatLineChart(
+            series: [_series((b) => b.income), _series((b) => b.expense)],
+            seriesColors: [palette.income, palette.expense],
+            isFilled: true,
             height: 160,
             showTooltip: true,
+            tooltipBuilder: (point, index) => switch (index) {
+              0 => 'In ${formatCurrencyNoCents(point.y)}',
+              _ => 'Out ${formatCurrencyNoCents(point.y)}',
+            },
           );
   }
 }
@@ -471,4 +489,22 @@ class _DeltaChip extends StatelessWidget {
       ],
     );
   }
+}
+
+String _mon(int m) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return months[m - 1];
 }

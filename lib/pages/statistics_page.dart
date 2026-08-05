@@ -146,6 +146,7 @@ class _StatisticsGrid extends StatelessWidget {
     add(
       TrendsCard(
         balanceTrend: bundle.balanceTrend,
+        defaultGranularity: _defaultGranularity(window),
         spendingByGranularity: {
           BucketGranularity.daily: _firstPoints(
             _service.calculateSpendingTrend(
@@ -310,6 +311,15 @@ class _StatisticsGrid extends StatelessWidget {
 
   List<SeriesPoint> _firstPoints(List<TrendSeries> series) =>
       series.isEmpty ? const <SeriesPoint>[] : series.first.points;
+
+  /// Picks a bucket size that produces enough points to draw a full line for
+  /// the given window (mirrors `calculateSavingsTrend`).
+  BucketGranularity _defaultGranularity(PeriodWindow window) {
+    final days = window.end.difference(window.start).inDays + 1;
+    if (days <= 45) return BucketGranularity.daily;
+    if (days <= 180) return BucketGranularity.weekly;
+    return BucketGranularity.monthly;
+  }
 
   List<SeriesPoint> _balancePoints(List<TransactionItem> txns, int days) {
     final now = DateTime.now();

@@ -61,19 +61,23 @@ class TrendSeries {
   bool get isUp => deltaPercent >= 0;
 }
 
-/// One column of a grouped income / expense / net bar chart.
+/// One column of a grouped income / expense / net comparison. The optional
+/// [date] carries the bucket start so consumers can render time-series lines
+/// as well as bars.
 class GroupedBar {
   const GroupedBar({
     required this.label,
     required this.income,
     required this.expense,
     required this.net,
+    this.date,
   });
 
   final String label;
   final double income;
   final double expense;
   final double net;
+  final DateTime? date;
 }
 
 /// Aggregated statistics for a single spending category within a range.

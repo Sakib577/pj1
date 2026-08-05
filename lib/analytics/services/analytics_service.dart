@@ -379,6 +379,7 @@ class AnalyticsService {
           income: income[key] ?? 0,
           expense: expense[key] ?? 0,
           net: (income[key] ?? 0) - (expense[key] ?? 0),
+          date: key,
         ),
     ];
   }

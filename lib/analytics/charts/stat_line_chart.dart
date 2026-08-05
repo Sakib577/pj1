@@ -15,6 +15,7 @@ class StatLineChart extends StatelessWidget {
     super.key,
     required this.series,
     this.seriesColors,
+    this.barWidths,
     this.isFilled = false,
     this.showTooltip = true,
     this.tooltipBuilder,
@@ -31,6 +32,9 @@ class StatLineChart extends StatelessWidget {
   /// them as separate [series] entries.
   final List<List<SeriesPoint>> series;
   final List<Color>? seriesColors;
+
+  /// Optional per-series stroke width; falls back to the default when absent.
+  final List<double>? barWidths;
   final bool isFilled;
   final bool showTooltip;
   final String Function(SeriesPoint point, int seriesIndex)? tooltipBuilder;
@@ -77,7 +81,9 @@ class StatLineChart extends StatelessWidget {
         LineChartBarData(
           spots: toSpots(series[i]),
           color: colors[i % colors.length],
-          barWidth: 2.5,
+          barWidth: barWidths != null && i < barWidths!.length
+              ? barWidths![i]
+              : 2.5,
           isCurved: true,
           isStrokeCapRound: true,
           dotData: FlDotData(show: false),
@@ -216,7 +222,7 @@ class StatLineChart extends StatelessWidget {
                           ts.round(),
                         );
                         final point = SeriesPoint(x: date, y: spot.y);
-                        final text = tooltipBuilder?.call(point, 0) ??
+                        final text = tooltipBuilder?.call(point, spot.barIndex) ??
                             formatCurrencyNoCents(spot.y);
                         return LineTooltipItem(
                           text,

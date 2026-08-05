@@ -1,7 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../state/finance_app_state.dart';
+import '../utils/csv_export.dart';
 import '../utils/currency_formatters.dart';
 import '../utils/currency_settings.dart';
 import 'settings_page.dart';
@@ -176,9 +181,58 @@ class _FinanceToolsPageState extends State<FinanceToolsPage> {
             icon: const Icon(Icons.content_copy),
             label: const Text('Copy report'),
           ),
+          const Divider(height: 40),
+          const Text(
+            'Export transactions',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Save every transaction as a spreadsheet-ready CSV file.',
+            style: TextStyle(color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => _exportCsv(state),
+            icon: const Icon(Icons.file_download_outlined),
+            label: const Text('Export CSV'),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _exportCsv(FinanceAppState state) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (state.transactions.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No transactions to export yet.')),
+      );
+      return;
+    }
+    try {
+      final csv = buildTransactionsCsv(state.transactions);
+      final dir = await getTemporaryDirectory();
+      final now = DateTime.now();
+      final file = File(
+        '${dir.path}/expense_tracker_${now.year.toString().padLeft(4, '0')}'
+        '${now.month.toString().padLeft(2, '0')}'
+        '${now.day.toString().padLeft(2, '0')}.csv',
+      );
+      await file.writeAsString(csv);
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'text/csv')],
+          subject: 'Expense Tracker transactions',
+        ),
+      );
+    } catch (_) {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Could not export the CSV file.')),
+        );
+      }
+    }
   }
 
   Future<void> _selectCurrency({

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -5,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'auth_gate.dart';
 import 'firebase_options.dart';
@@ -23,9 +26,10 @@ void _setupGlobalErrorHandlers() {
   // ---------- Flutter framework errors (e.g. overflow, null widget) ----------
   final originalOnError = FlutterError.onError;
   FlutterError.onError = (FlutterErrorDetails details) {
-    // In release mode, show a visible screen AND still call the original
-    // handler so the error still reaches the console / platform dispatcher.
-    _lastError = details.exceptionAsString();
+    // Store the exception AND its stack trace so the error screen shows enough
+    // to locate the crash site (previously only the message was kept).
+    _lastError = '${details.exception}\n\n${details.stack}';
+    unawaited(_persistCrash(_lastError!));
     originalOnError?.call(details);
   };
 
@@ -36,11 +40,25 @@ void _setupGlobalErrorHandlers() {
   // while runApp ran in the new one, triggering the "zone mismatch" warning.
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
     _lastError = '$error\n\n$stack';
+    unawaited(_persistCrash(_lastError!));
     // Re-run the app with the error visible (the root widget checks for this),
     // matching the previous runZonedGuarded error handler behaviour.
     runApp(const MyApp());
     return true;
   };
+}
+
+/// Writes the captured error to `crash_log.txt` in the app documents directory
+/// so it can be retrieved even if the on-screen text is truncated (e.g. via
+/// `adb exec-out run-as <package> cat files/crash_log.txt`).
+Future<void> _persistCrash(String message) async {
+  try {
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/crash_log.txt');
+    await file.writeAsString('$_lastError\n', flush: true);
+  } catch (_) {
+    // Best-effort only; the on-screen error screen still works without it.
+  }
 }
 
 // Entry point: Flutter starts running the app from here.
@@ -135,8 +153,8 @@ class _ErrorScreen extends StatelessWidget {
                       border: Border.all(color: const Color(0xFFFECACA)),
                     ),
                     child: SelectableText(
-                      message.length > 2000
-                          ? '${message.substring(0, 2000)}...\n\n(truncated)'
+                      message.length > 20000
+                          ? '${message.substring(0, 20000)}...\n\n(truncated)'
                           : message,
                       style: const TextStyle(
                         fontFamily: 'monospace',

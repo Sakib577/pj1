@@ -27,6 +27,9 @@ const _slate = PdfColor.fromInt(0xFF64748B);
 const _muted = PdfColor.fromInt(0xFF94A3B8);
 const _borderGrey = PdfColor.fromInt(0xFFE2E8F0);
 const _lightBg = PdfColor.fromInt(0xFFF8FAFC);
+const _pageBg = PdfColor.fromInt(0xFFF1F5F9);
+const _forecastActual = PdfColor.fromInt(0xFFF59E0B);
+const _forecastTail = PdfColor.fromInt(0xFF94A3B8);
 
 const _pageWidth = 515.0;
 
@@ -146,37 +149,425 @@ pw.Widget _divider() {
   return pw.Divider(color: _borderGrey, height: 18);
 }
 
-pw.Widget _statGrid(List<(String, double, PdfColor)> cells) {
-  final rows = <List<dynamic>>[];
-  for (var i = 0; i < cells.length; i += 2) {
-    final row = <dynamic>[];
-    for (var j = i; j < i + 2 && j < cells.length; j++) {
-      row.add(
-        pw.Column(
+pw.Widget _empty(String text) {
+  return pw.Text(_sanitize(text), style: pw.TextStyle(fontSize: 9, color: _muted));
+}
+
+/// Card shell that mirrors the app's [StatCard] look: rounded surface, subtle
+/// border, colored accent chip + bold title + grey subtitle, content below.
+pw.Widget _statCard({
+  required String title,
+  required PdfColor accent,
+  String? subtitle,
+  required pw.Widget child,
+}) {
+  return pw.Container(
+    padding: const pw.EdgeInsets.all(14),
+    decoration: pw.BoxDecoration(
+      color: PdfColors.white,
+      borderRadius: pw.BorderRadius.circular(14),
+      border: pw.Border.all(color: _borderGrey, width: 0.6),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Row(
           children: [
-            pw.Text(cells[j].$1, style: pw.TextStyle(fontSize: 8, color: _slate)),
-            pw.SizedBox(height: 3),
-            pw.Text(
-              _num(_display(cells[j].$2)),
-              style: pw.TextStyle(
-                fontSize: 11,
-                fontWeight: pw.FontWeight.bold,
-                color: cells[j].$3,
+            pw.Container(
+              width: 18,
+              height: 18,
+              decoration: pw.BoxDecoration(
+                color: accent,
+                borderRadius: pw.BorderRadius.circular(5),
+              ),
+            ),
+            pw.SizedBox(width: 8),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    title,
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                      color: _ink,
+                    ),
+                  ),
+                  if (subtitle != null)
+                    pw.Text(
+                      _sanitize(subtitle),
+                      style: pw.TextStyle(fontSize: 8, color: _muted),
+                    ),
+                ],
               ),
             ),
           ],
         ),
-      );
-    }
-    rows.add(row);
-  }
-  return pw.TableHelper.fromTextArray(
-    border: _tableBorder(),
-    cellPadding: const pw.EdgeInsets.all(8),
-    headerCount: 0,
-    cellAlignment: pw.Alignment.center,
-    cellStyle: pw.TextStyle(fontSize: 9, color: _ink),
-    data: rows,
+        pw.SizedBox(height: 12),
+        child,
+      ],
+    ),
+  );
+}
+
+pw.Widget _figure(String label, String value, PdfColor color) {
+  return pw.Expanded(
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(label, style: pw.TextStyle(fontSize: 8, color: _slate)),
+        pw.SizedBox(height: 2),
+        pw.Text(
+          value,
+          style: pw.TextStyle(
+            fontSize: 12,
+            fontWeight: pw.FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+pw.Widget _textRow(String label, String value) {
+  return pw.Padding(
+    padding: const pw.EdgeInsets.symmetric(vertical: 3),
+    child: pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Text(label, style: pw.TextStyle(fontSize: 9, color: _slate)),
+        pw.Text(
+          _sanitize(value),
+          style: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+            color: _ink,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+pw.Widget _legendDot(PdfColor color, String label) {
+  return pw.Row(
+    mainAxisSize: pw.MainAxisSize.min,
+    children: [
+      pw.Container(
+        width: 12,
+        height: 3,
+        decoration: pw.BoxDecoration(
+          color: color,
+          borderRadius: pw.BorderRadius.circular(2),
+        ),
+      ),
+      pw.SizedBox(width: 5),
+      pw.Text(label, style: pw.TextStyle(fontSize: 9, color: _slate)),
+    ],
+  );
+}
+
+pw.Widget _progressBar(double ratio, PdfColor color) {
+  final clamped = ratio.clamp(0.0, 1.0);
+  return pw.LayoutBuilder(
+    builder: (context, constraints) => pw.Container(
+      height: 8,
+      decoration: pw.BoxDecoration(
+        color: _borderGrey,
+        borderRadius: pw.BorderRadius.circular(6),
+      ),
+      child: pw.Align(
+        alignment: pw.Alignment.centerLeft,
+        child: pw.Container(
+          width: (constraints?.maxWidth ?? 0) * clamped,
+          height: 8,
+          decoration: pw.BoxDecoration(
+            color: color,
+            borderRadius: pw.BorderRadius.circular(6),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+pw.Widget _progressRow({
+  required String label,
+  required double amount,
+  required double ratio,
+  required PdfColor color,
+  double delta = 0,
+  String? deltaLabel,
+}) {
+  return pw.Row(
+    children: [
+      pw.SizedBox(
+        width: 62,
+        child: pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+            color: _slate,
+          ),
+        ),
+      ),
+      pw.Expanded(child: _progressBar(ratio, color)),
+      pw.SizedBox(width: 10),
+      pw.SizedBox(
+        width: 82,
+        child: pw.Text(
+          _num(amount),
+          textAlign: pw.TextAlign.right,
+          style: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+            color: _ink,
+          ),
+        ),
+      ),
+      pw.SizedBox(width: 36),
+      pw.SizedBox(
+        width: 40,
+        child: pw.Text(
+          delta == 0
+              ? (deltaLabel ?? '-')
+              : '${delta > 0 ? '+' : ''}${delta.toStringAsFixed(0)}%',
+          textAlign: pw.TextAlign.right,
+          style: pw.TextStyle(
+            fontSize: 8,
+            fontWeight: pw.FontWeight.bold,
+            color: delta > 0 ? _green : _red,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+pw.Widget _legendRow(
+  PdfColor color,
+  String label,
+  String amount,
+  String percent,
+) {
+  return pw.Row(
+    children: [
+      pw.Container(
+        width: 10,
+        height: 10,
+        decoration: pw.BoxDecoration(color: color, shape: pw.BoxShape.circle),
+      ),
+      pw.SizedBox(width: 8),
+      pw.Expanded(
+        child: pw.Text(
+          _sanitize(label),
+          style: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.normal,
+            color: _ink,
+          ),
+        ),
+      ),
+      pw.SizedBox(width: 8),
+      pw.Text(
+        amount,
+        style: pw.TextStyle(
+          fontSize: 9,
+          fontWeight: pw.FontWeight.bold,
+          color: _ink,
+        ),
+      ),
+      pw.SizedBox(width: 8),
+      pw.SizedBox(
+        width: 34,
+        child: pw.Text(
+          percent,
+          textAlign: pw.TextAlign.right,
+          style: pw.TextStyle(fontSize: 9, color: _slate),
+        ),
+      ),
+    ],
+  );
+}
+
+pw.Widget _donutWidget({
+  required List<_Slice> slices,
+  required double size,
+  required String centerLabel,
+  required String centerSubtitle,
+}) {
+  return pw.Stack(
+    alignment: pw.Alignment.center,
+    children: [
+      pw.CustomPaint(
+        size: PdfPoint(size, size),
+        painter: (canvas, size) => _paintDonut(canvas, size.x, size.y, slices),
+      ),
+      pw.Column(
+        mainAxisSize: pw.MainAxisSize.min,
+        children: [
+          pw.Text(
+            centerLabel,
+            style: pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+              color: _ink,
+            ),
+          ),
+          pw.Text(
+            _sanitize(centerSubtitle),
+            style: pw.TextStyle(fontSize: 8, color: _muted),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+pw.Widget _gaugeWidget({
+  required double ratio,
+  required String centerLabel,
+  required String centerSubtitle,
+  required PdfColor color,
+  double size = 120,
+}) {
+  return pw.Stack(
+    alignment: pw.Alignment.center,
+    children: [
+      pw.CustomPaint(
+        size: PdfPoint(size, size),
+        painter: (canvas, size) =>
+            _paintGauge(canvas, size.x, size.y, ratio, color),
+      ),
+      pw.Column(
+        mainAxisSize: pw.MainAxisSize.min,
+        children: [
+          pw.Text(
+            centerLabel,
+            style: pw.TextStyle(
+              fontSize: 16,
+              fontWeight: pw.FontWeight.bold,
+              color: _ink,
+            ),
+          ),
+          pw.Text(
+            _sanitize(centerSubtitle),
+            style: pw.TextStyle(fontSize: 8, color: _muted),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+pw.Widget _expenseRow(TopExpense top) {
+  final t = top.txn;
+  final color = PdfColor.fromInt(t.iconColor.toARGB32() & 0xFFFFFF);
+  return pw.Padding(
+    padding: const pw.EdgeInsets.symmetric(vertical: 5),
+    child: pw.Row(
+      children: [
+        pw.Container(
+          width: 24,
+          height: 24,
+          decoration: pw.BoxDecoration(
+            color: color.withAlpha(0.15),
+            shape: pw.BoxShape.circle,
+          ),
+        ),
+        pw.SizedBox(width: 10),
+        pw.Expanded(
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                _sanitize(t.title),
+                style: pw.TextStyle(
+                  fontSize: 9,
+                  fontWeight: pw.FontWeight.bold,
+                  color: _ink,
+                ),
+              ),
+              if (t.subtitle.isNotEmpty)
+                pw.Text(
+                  _sanitize(t.subtitle),
+                  style: pw.TextStyle(fontSize: 8, color: _muted),
+                ),
+            ],
+          ),
+        ),
+        pw.SizedBox(width: 10),
+        pw.Text(
+          _num(_display(t.amount)),
+          style: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+pw.Widget _budgetRow(BudgetProgress entry) {
+  final statusColor = PdfColor.fromInt(entry.statusColor.toARGB32() & 0xFFFFFF);
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      pw.Row(
+        children: [
+          pw.Expanded(
+            child: pw.Text(
+              _sanitize(entry.budget.label),
+              style: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+                color: _ink,
+              ),
+            ),
+          ),
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: pw.BoxDecoration(
+              color: statusColor.withAlpha(0.12),
+              borderRadius: pw.BorderRadius.circular(8),
+            ),
+            child: pw.Text(
+              _sanitize(entry.status),
+              style: pw.TextStyle(
+                fontSize: 8,
+                fontWeight: pw.FontWeight.bold,
+                color: statusColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 6),
+      _progressBar(entry.ratio, statusColor),
+      pw.SizedBox(height: 5),
+      pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            '${_num(_display(entry.spent))} spent',
+            style: pw.TextStyle(fontSize: 8, color: _slate),
+          ),
+          pw.Text(
+            '${_num(_display(entry.remaining))} remaining',
+            style: pw.TextStyle(
+              fontSize: 8,
+              fontWeight: pw.FontWeight.bold,
+              color: statusColor,
+            ),
+          ),
+        ],
+      ),
+    ],
   );
 }
 
@@ -271,44 +662,93 @@ Future<Uint8List> buildStatisticsPdf({
   );
   doc.addPage(
     pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(36),
+      pageTheme: pw.PageTheme(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(36),
+        buildBackground: (context) => pw.FullPage(
+          ignoreMargins: true,
+          child: pw.Container(color: _pageBg),
+        ),
+      ),
       build: (context) => [
         _docTitle('Statistics Report'),
         _docMeta([
           'Period: ${bundle.window.label} '
-              '(${_shortDate(bundle.window.start)} – ${_shortDate(bundle.window.end)})',
-          'Generated: ${_shortDate(now)} · Currency: $_code',
+              '(${_shortDate(bundle.window.start)} - ${_shortDate(bundle.window.end)})',
+          'Generated: ${_shortDate(now)} | Currency: $_code',
         ]),
-        _sectionTitle('Cash Flow Summary', color: _orange),
-        _statGrid([
-          ('Income', bundle.cashFlow.income, _green),
-          ('Expenses', bundle.cashFlow.expense, _red),
-          ('Net', bundle.cashFlow.net, _blue),
-          ('Saved', bundle.cashFlow.saved, _green),
-        ]),
-        _divider(),
+        pw.SizedBox(height: 8),
+        _cashFlowSection(bundle.cashFlow, bundle.window.label),
+        pw.SizedBox(height: 14),
         _categoryDonutSection(bundle.categorySpending),
-        _divider(),
+        pw.SizedBox(height: 14),
         _incomeExpenseSection(bundle.incomeExpenseComparison),
-        _divider(),
+        pw.SizedBox(height: 14),
+        _spendingPatternSection(bundle.spendingTrend),
+        pw.SizedBox(height: 14),
         _balanceTrendSection(bundle.balanceTrend),
-        _divider(),
+        pw.SizedBox(height: 14),
         _topExpensesSection(bundle.topExpenses),
-        _divider(),
+        pw.SizedBox(height: 14),
+        _debtRatioSection(bundle.debtRatio, bundle.window.label),
+        pw.SizedBox(height: 14),
         _monthlyOverviewSection(bundle.monthlyOverview),
-        _divider(),
+        pw.SizedBox(height: 14),
         _incomeAnalyticsSection(bundle.incomeAnalytics),
-        _divider(),
+        pw.SizedBox(height: 14),
         _budgetProgressSection(bundle.budgetProgress),
-        _divider(),
+        pw.SizedBox(height: 14),
         _forecastSection(bundle.cashFlowForecast),
-        _divider(),
-        _debtRatioSection(bundle.debtRatio),
       ],
     ),
   );
   return doc.save();
+}
+
+pw.Widget _cashFlowSection(CashFlowSummary summary, String rangeLabel) {
+  final maxValue = math.max(summary.income, summary.expense);
+  return _statCard(
+    title: 'Cash Flow Summary',
+    accent: _orange,
+    subtitle: rangeLabel,
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            _figure('Income', _num(_display(summary.income)), _green),
+            _figure('Expense', _num(_display(summary.expense)), _red),
+            _figure('Net', _num(_display(summary.net)), _blue),
+          ],
+        ),
+        pw.SizedBox(height: 14),
+        _progressRow(
+          label: 'Income',
+          amount: _display(summary.income),
+          ratio: maxValue == 0 ? 0 : summary.income / maxValue,
+          color: _green,
+          delta: summary.incomeVsPrevious,
+        ),
+        pw.SizedBox(height: 8),
+        _progressRow(
+          label: 'Expense',
+          amount: _display(summary.expense),
+          ratio: maxValue == 0 ? 0 : summary.expense / maxValue,
+          color: _red,
+          delta: summary.expenseVsPrevious,
+        ),
+        pw.SizedBox(height: 8),
+        _progressRow(
+          label: 'Net',
+          amount: _display(summary.net),
+          ratio: maxValue == 0 ? 0 : (summary.net.abs() / maxValue).clamp(0, 1),
+          color: _blue,
+          deltaLabel: 'saved',
+        ),
+      ],
+    ),
+  );
 }
 
 pw.Widget _categoryDonutSection(List<CategoryStat> categories) {
@@ -329,220 +769,212 @@ pw.Widget _categoryDonutSection(List<CategoryStat> categories) {
   ];
 
   final displayTotal = _display(total);
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      _sectionTitle('Spending by Category', color: _orange),
-      if (slices.isEmpty)
-        _hint('No spending recorded in this period.')
-      else ...[
-        pw.SizedBox(
-          height: 210,
-          child: pw.Stack(
+  return _statCard(
+    title: 'Spending by Categories',
+    accent: _orange,
+    child: slices.isEmpty
+        ? _empty('No spending recorded in this period.')
+        : pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Positioned.fill(
-                child: pw.CustomPaint(
-                  size: PdfPoint(_pageWidth, 210),
-                  painter: (canvas, size) =>
-                      _paintDonut(canvas, size.x, size.y, slices),
-                ),
+              _donutWidget(
+                slices: slices,
+                size: 150,
+                centerLabel: _num(displayTotal),
+                centerSubtitle: 'Total',
               ),
-              pw.Positioned(
-                left: 257.5 - 45,
-                top: 105 - 8,
-                child: pw.Text(
-                  _num(displayTotal),
-                  style: pw.TextStyle(
-                    fontSize: 16,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _ink,
-                  ),
-                ),
-              ),
-              pw.Positioned(
-                left: 257.5 - 16,
-                top: 126,
-                child: pw.Text(
-                  'total',
-                  style: pw.TextStyle(fontSize: 8, color: _muted),
+              pw.SizedBox(width: 14),
+              pw.Expanded(
+                child: pw.Column(
+                  children: [
+                    for (final slice in slices)
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(vertical: 3),
+                        child: _legendRow(
+                          slice.color,
+                          slice.label,
+                          _num(slice.value),
+                          displayTotal == 0
+                              ? '0%'
+                              : '${(slice.value / displayTotal * 100).toStringAsFixed(0)}%',
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],
           ),
-        ),
-        pw.SizedBox(height: 8),
-        pw.TableHelper.fromTextArray(
-          border: _tableBorder(),
-          cellPadding: const pw.EdgeInsets.all(6),
-          headers: const ['Category', 'Amount', '%'],
-          headerDecoration: const pw.BoxDecoration(color: _lightBg),
-          headerStyle: pw.TextStyle(
-            fontSize: 9,
-            fontWeight: pw.FontWeight.bold,
-            color: _ink,
-          ),
-          cellStyle: pw.TextStyle(fontSize: 9, color: _ink),
-          headerAlignments: const {
-            0: pw.Alignment.centerLeft,
-            1: pw.Alignment.centerRight,
-            2: pw.Alignment.centerRight,
-          },
-          cellAlignments: const {
-            0: pw.Alignment.centerLeft,
-            1: pw.Alignment.centerRight,
-            2: pw.Alignment.centerRight,
-          },
-          data: [
-            for (final slice in slices)
-              [
-                slice.label,
-                _num(slice.value),
-                displayTotal == 0
-                    ? '0%'
-                    : '${(slice.value / displayTotal * 100).toStringAsFixed(1)}%',
-              ],
-            ['Total', _num(displayTotal), '100%'],
-          ],
-        ),
-      ],
-    ],
   );
 }
 
 pw.Widget _incomeExpenseSection(List<GroupedBar> bars) {
   final limited = bars.length > 15 ? bars.sublist(bars.length - 15) : bars;
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      _sectionTitle('Income vs Expenses', color: _orange),
-      _hint(
-        '${bars.length} ${bars.length == 1 ? 'period' : 'periods'} shown · '
-        'green = income, red = expenses',
-      ),
-      pw.SizedBox(height: 6),
-      pw.SizedBox(
-        height: 190,
-        child: pw.Stack(
-          children: [
-            pw.Positioned.fill(
-              child: pw.CustomPaint(
-                size: PdfPoint(_pageWidth, 190),
-                painter: (canvas, size) =>
-                    _paintBars(canvas, size.x, size.y, limited),
+  return _statCard(
+    title: 'Income vs Expenses',
+    accent: _orange,
+    subtitle: '${bars.length} ${bars.length == 1 ? 'period' : 'periods'}',
+    child: limited.isEmpty
+        ? _empty('No income or expenses in this period.')
+        : pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Row(
+                children: [
+                  _legendDot(_green, 'Income'),
+                  pw.SizedBox(width: 16),
+                  _legendDot(_red, 'Expenses'),
+                ],
               ),
-            ),
-            pw.Positioned(
-              left: 10,
-              top: 4,
-              child: pw.Text(
-                _maxBarLabel(limited),
-                style: pw.TextStyle(fontSize: 8, color: _muted),
+              pw.SizedBox(height: 8),
+              pw.SizedBox(
+                height: 170,
+                child: pw.Stack(
+                  children: [
+                    pw.Positioned.fill(
+                      child: pw.CustomPaint(
+                        size: PdfPoint(_pageWidth, 170),
+                        painter: (canvas, size) =>
+                            _paintBars(canvas, size.x, size.y, limited),
+                      ),
+                    ),
+                    pw.Positioned(
+                      left: 10,
+                      top: 4,
+                      child: pw.Text(
+                        _maxBarLabel(limited),
+                        style: pw.TextStyle(fontSize: 8, color: _muted),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+            ],
+          ),
+  );
+}
+
+pw.Widget _spendingPatternSection(List<TrendSeries> spendingTrend) {
+  final points = spendingTrend.isEmpty ? const <SeriesPoint>[] : spendingTrend.first.points;
+  final values = [for (final p in points) _display(p.y)];
+  return _statCard(
+    title: 'Spending Pattern',
+    accent: _orange,
+    subtitle: 'Expense per day',
+    child: points.length < 2
+        ? _empty('No spending in this period.')
+        : pw.SizedBox(
+            height: 170,
+            child: pw.Stack(
+              children: [
+                pw.Positioned.fill(
+                  child: pw.CustomPaint(
+                    size: PdfPoint(_pageWidth, 170),
+                    painter: (canvas, size) =>
+                        _paintLine(canvas, size.x, size.y, values, _orange),
+                  ),
+                ),
+                for (final l in _lineLabels(values, 170))
+                  pw.Positioned(
+                    left: l.$1,
+                    top: l.$2,
+                    child: pw.Text(
+                      l.$3,
+                      style: pw.TextStyle(fontSize: 8, color: _muted),
+                    ),
+                  ),
+              ],
             ),
-          ],
-        ),
-      ),
-    ],
+          ),
   );
 }
 
 pw.Widget _balanceTrendSection(TrendSeries trend) {
   final points = trend.points;
   final values = [for (final p in points) _display(p.y)];
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      _sectionTitle('Balance Trend', color: _orange),
-      _hint(
-        points.isEmpty
-            ? 'No balance data in this period.'
-            : '${points.length} points · ${_shortDate(points.first.x)} → '
-                '${_shortDate(points.last.x)}',
-      ),
-      if (points.isNotEmpty) ...[
-        pw.SizedBox(height: 6),
-        pw.SizedBox(
-          height: 190,
-          child: pw.Stack(
-            children: [
-              pw.Positioned.fill(
-                child: pw.CustomPaint(
-                  size: PdfPoint(_pageWidth, 190),
-                  painter: (canvas, size) =>
-                      _paintLine(canvas, size.x, size.y, values, _blue),
-                ),
-              ),
-              for (final l in _lineLabels(values, 190))
-                pw.Positioned(
-                  left: l.$1,
-                  top: l.$2,
-                  child: pw.Text(
-                    l.$3,
-                    style: pw.TextStyle(fontSize: 8, color: _muted),
+  return _statCard(
+    title: 'Balance Trend',
+    accent: _orange,
+    subtitle: points.isEmpty
+        ? null
+        : '${points.length} points | ${_shortDate(points.first.x)} to '
+            '${_shortDate(points.last.x)}',
+    child: points.length < 2
+        ? _empty('No balance data in this period.')
+        : pw.SizedBox(
+            height: 170,
+            child: pw.Stack(
+              children: [
+                pw.Positioned.fill(
+                  child: pw.CustomPaint(
+                    size: PdfPoint(_pageWidth, 170),
+                    painter: (canvas, size) =>
+                        _paintLine(canvas, size.x, size.y, values, _blue),
                   ),
                 ),
-            ],
+                for (final l in _lineLabels(values, 170))
+                  pw.Positioned(
+                    left: l.$1,
+                    top: l.$2,
+                    child: pw.Text(
+                      l.$3,
+                      style: pw.TextStyle(fontSize: 8, color: _muted),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-      ],
-    ],
   );
 }
 
 pw.Widget _topExpensesSection(List<TopExpense> expenses) {
-  final rows = <List<dynamic>>[
-    for (final top in expenses.take(10))
-      [
-        top.txn.title,
-        top.txn.categoryName,
-        _shortDate(top.txn.createdAt ?? DateTime.now()),
-        _num(_display(top.txn.amount)),
-      ],
-  ];
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      _sectionTitle('Top Expenses', color: _orange),
-      if (rows.isEmpty)
-        _hint('No expenses in this period.')
-      else
-        _simpleTable(
-          headers: const ['Title', 'Category', 'Date', 'Amount'],
-          rows: rows,
-          alignments: const {
-            0: pw.Alignment.centerLeft,
-            1: pw.Alignment.centerLeft,
-            2: pw.Alignment.centerLeft,
-            3: pw.Alignment.centerRight,
-          },
-          boldColumns: const [3],
-        ),
-    ],
+  final shown = expenses.take(10).toList();
+  return _statCard(
+    title: 'Top Expenses',
+    accent: _orange,
+    child: shown.isEmpty
+        ? _empty('No expenses in this period.')
+        : pw.Column(
+            children: [
+              for (var i = 0; i < shown.length; i++) ...[
+                _expenseRow(shown[i]),
+                if (i != shown.length - 1)
+                  pw.Divider(color: _borderGrey, height: 10),
+              ],
+            ],
+          ),
   );
 }
 
 pw.Widget _monthlyOverviewSection(MonthlyOverview overview) {
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      _sectionTitle('Monthly Overview', color: _orange),
-      _statGrid([
-        ('Income', overview.income, _green),
-        ('Expenses', overview.expense, _red),
-        ('Net', overview.net, _blue),
-        ('Saved', overview.saved, _green),
-        ('Avg Daily Spend', overview.avgDailySpend, _ink),
-        ('Transactions', overview.transactionCount.toDouble(), _ink),
-      ]),
-      pw.SizedBox(height: 6),
-      pw.Text(
-        _sanitize(
-          'Busiest day: ${overview.busiestDay} | Top category: '
-          '${overview.topCategory}',
+  return _statCard(
+    title: 'Monthly Overview',
+    accent: _orange,
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            _figure('Income', _num(_display(overview.income)), _green),
+            _figure('Expense', _num(_display(overview.expense)), _red),
+            _figure('Net', _num(_display(overview.net)), _blue),
+          ],
         ),
-        style: pw.TextStyle(fontSize: 9, color: _slate),
-      ),
-    ],
+        pw.SizedBox(height: 10),
+        pw.Divider(color: _borderGrey, height: 1),
+        pw.SizedBox(height: 8),
+        _textRow('Saved', _num(_display(overview.saved))),
+        _textRow('Avg daily spend', _num(_display(overview.avgDailySpend))),
+        _textRow('Busiest day', overview.busiestDay),
+        _textRow('Top category', overview.topCategory),
+        _textRow('Transactions', '${overview.transactionCount}'),
+        pw.SizedBox(height: 4),
+        pw.Text(
+          'Tip: keep your saved amount positive to build healthy savings.',
+          style: pw.TextStyle(fontSize: 8, color: _muted),
+        ),
+      ],
+    ),
   );
 }
 
@@ -551,153 +983,238 @@ pw.Widget _incomeAnalyticsSection(IncomeAnalytics analytics) {
     ..sort((a, b) => b.amount.compareTo(a.amount));
   final total = sorted.fold<double>(0, (s, c) => s + c.amount);
   final displayTotal = _display(total);
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      _sectionTitle('Income Analytics', color: _orange),
-      if (sorted.isEmpty)
-        _hint('No income recorded in this period.')
-      else ...[
-        _simpleTable(
-          headers: const ['Source', 'Amount', '%'],
-          rows: [
-            for (final c in sorted.take(8))
-              [
-                c.name,
-                _num(_display(c.amount)),
-                displayTotal == 0
-                    ? '0%'
-                    : '${(_display(c.amount) / displayTotal * 100).toStringAsFixed(1)}%',
+  final shown = sorted.take(7).toList();
+  final rest = sorted.skip(7).fold<double>(0, (s, c) => s + c.amount);
+  final slices = <_Slice>[
+    for (var i = 0; i < shown.length; i++)
+      _Slice(
+        shown[i].name,
+        _display(shown[i].amount),
+        _sliceColors[(i + 2) % _sliceColors.length],
+      ),
+    if (rest > 0) _Slice('Other', _display(rest), _muted),
+  ];
+  final largest = analytics.largest;
+  return _statCard(
+    title: 'Income Analytics',
+    accent: _orange,
+    child: sorted.isEmpty
+        ? _empty('No income recorded in this period.')
+        : pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Total income: ${_num(displayTotal)}',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                  color: _green,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  _donutWidget(
+                    slices: slices,
+                    size: 130,
+                    centerLabel: _num(displayTotal),
+                    centerSubtitle: 'Total',
+                  ),
+                  pw.SizedBox(width: 14),
+                  pw.Expanded(
+                    child: pw.Column(
+                      children: [
+                        for (final slice in slices)
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 3),
+                            child: _legendRow(
+                              slice.color,
+                              slice.label,
+                              _num(slice.value),
+                              displayTotal == 0
+                                  ? '0%'
+                                  : '${(slice.value / displayTotal * 100).toStringAsFixed(0)}%',
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (largest != null) ...[
+                pw.Divider(color: _borderGrey, height: 18),
+                pw.Text(
+                  'Largest income',
+                  style: pw.TextStyle(fontSize: 8, color: _muted),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Row(
+                  children: [
+                    pw.Container(
+                      width: 20,
+                      height: 20,
+                      decoration: pw.BoxDecoration(
+                        color: PdfColor.fromInt(largest.iconColor.toARGB32() & 0xFFFFFF)
+                            .withAlpha(0.15),
+                        shape: pw.BoxShape.circle,
+                      ),
+                    ),
+                    pw.SizedBox(width: 8),
+                    pw.Expanded(
+                      child: pw.Text(
+                        _sanitize(largest.title),
+                        style: pw.TextStyle(
+                          fontSize: 9,
+                          fontWeight: pw.FontWeight.bold,
+                          color: _ink,
+                        ),
+                      ),
+                    ),
+                    pw.Text(
+                      _num(_display(largest.amount)),
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        color: _green,
+                      ),
+                    ),
+                  ],
+                ),
               ],
-            ['Total', _num(displayTotal), '100%'],
-          ],
-          alignments: const {
-            0: pw.Alignment.centerLeft,
-            1: pw.Alignment.centerRight,
-            2: pw.Alignment.centerRight,
-          },
-          boldColumns: const [1],
-        ),
-        if (analytics.largest != null) ...[
-          pw.SizedBox(height: 6),
-          pw.Text(
-            _sanitize(
-              'Largest income: ${analytics.largest!.title} | '
-              '${_money(analytics.largest!.amount)}',
-            ),
-            style: pw.TextStyle(fontSize: 9, color: _slate),
+            ],
           ),
-        ],
-      ],
-    ],
   );
 }
 
 pw.Widget _budgetProgressSection(List<BudgetProgress> progress) {
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      _sectionTitle('Budget Progress', color: _orange),
-      if (progress.isEmpty)
-        _hint('No budgets set.')
-      else
-        _simpleTable(
-          headers: const ['Budget', 'Limit', 'Spent', 'Remaining', 'Used'],
-          rows: [
-            for (final p in progress)
-              [
-                p.budget.label,
-                _num(_display(p.budget.limit)),
-                _num(_display(p.spent)),
-                _num(_display(p.remaining)),
-                '${(p.ratio * 100).toStringAsFixed(0)}%',
+  return _statCard(
+    title: 'Budget Progress',
+    accent: _orange,
+    child: progress.isEmpty
+        ? _empty('No budgets set yet.')
+        : pw.Column(
+            children: [
+              for (var i = 0; i < progress.length; i++) ...[
+                _budgetRow(progress[i]),
+                if (i != progress.length - 1)
+                  pw.Divider(color: _borderGrey, height: 16),
               ],
-          ],
-          alignments: const {
-            0: pw.Alignment.centerLeft,
-            1: pw.Alignment.centerRight,
-            2: pw.Alignment.centerRight,
-            3: pw.Alignment.centerRight,
-            4: pw.Alignment.centerRight,
-          },
-        ),
-    ],
+            ],
+          ),
   );
 }
 
 pw.Widget _forecastSection(List<ForecastPoint> points) {
-  if (points.isEmpty) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        _sectionTitle('Cash Flow Forecast', color: _orange),
-        _hint('Not enough data to forecast.'),
-      ],
-    );
-  }
   final values = [for (final p in points) _display(p.value)];
   final firstForecast = points.indexWhere((p) => p.forecast);
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      _sectionTitle('Cash Flow Forecast', color: _orange),
-      _hint(
-        'Actual spending (solid line) with projected values (dashed). '
-        'Projected total: ${_money(points.last.value)}',
-      ),
-      pw.SizedBox(height: 6),
-      pw.SizedBox(
-        height: 190,
-        child: pw.CustomPaint(
-          size: PdfPoint(_pageWidth, 190),
-          painter: (canvas, size) => _paintForecast(
-            canvas,
-            size.x,
-            size.y,
-            values,
-            firstForecast < 0 ? values.length : firstForecast,
+  return _statCard(
+    title: 'Cash Flow Forecast',
+    accent: _orange,
+    subtitle: points.isEmpty
+        ? null
+        : 'Projected daily net over the next ${points.where((p) => p.forecast).length} days',
+    child: points.length < 2
+        ? _empty('Not enough data to forecast.')
+        : pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.SizedBox(
+                height: 170,
+                child: pw.CustomPaint(
+                  size: PdfPoint(_pageWidth, 170),
+                  painter: (canvas, size) => _paintForecast(
+                    canvas,
+                    size.x,
+                    size.y,
+                    values,
+                    firstForecast < 0 ? values.length : firstForecast,
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 6),
+              pw.Row(
+                children: [
+                  _legendDot(_forecastActual, 'Actual'),
+                  pw.SizedBox(width: 16),
+                  _legendDot(_forecastTail, 'Forecast'),
+                ],
+              ),
+            ],
           ),
-        ),
-      ),
-    ],
   );
 }
 
-pw.Widget _debtRatioSection(GaugeResult? gauge) {
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      _sectionTitle('Debt-to-Income', color: _orange),
-      if (gauge == null)
-        _hint('No debt-to-income reading for this period.')
-      else
-        pw.Row(
-          crossAxisAlignment: pw.CrossAxisAlignment.end,
-          children: [
-            pw.Text(
-              '${(gauge.ratio * 100).toStringAsFixed(0)}%',
-              style: pw.TextStyle(
-                fontSize: 20,
-                fontWeight: pw.FontWeight.bold,
-                color: gauge.level == HealthLevel.poor
-                    ? _red
-                    : gauge.level == HealthLevel.moderate
-                    ? _orange
-                    : _green,
+pw.Widget _debtRatioSection(GaugeResult? gauge, String rangeLabel) {
+  final levelColor = switch (gauge?.level) {
+    HealthLevel.moderate => _orange,
+    HealthLevel.poor => _red,
+    _ => _green,
+  };
+  final levelLabel = switch (gauge?.level) {
+    HealthLevel.moderate => 'Moderate',
+    HealthLevel.poor => 'High',
+    _ => 'Healthy',
+  };
+  return _statCard(
+    title: 'Debt-to-Income Ratio',
+    accent: _orange,
+    subtitle: rangeLabel,
+    child: gauge == null
+        ? _empty('No debt-to-income reading for this period.')
+        : pw.Row(
+            children: [
+              _gaugeWidget(
+                ratio: (gauge.ratio / 3).clamp(0.0, 1.0),
+                centerLabel: '${(gauge.ratio * 100).toStringAsFixed(0)}%',
+                centerSubtitle: 'DTI',
+                color: levelColor,
               ),
-            ),
-            pw.SizedBox(width: 10),
-            pw.Expanded(
-              child: pw.Text(
-                _sanitize(
-                  '${gauge.label} | Health: ${gauge.level.name}',
+              pw.SizedBox(width: 18),
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Row(
+                      children: [
+                        pw.Container(
+                          width: 9,
+                          height: 9,
+                          decoration: pw.BoxDecoration(
+                            color: levelColor,
+                            shape: pw.BoxShape.circle,
+                          ),
+                        ),
+                        pw.SizedBox(width: 6),
+                        pw.Text(
+                          levelLabel,
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                            color: levelColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Text(
+                      'Total debt: ${_money(gauge.value)}',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        color: _ink,
+                      ),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'A healthy DTI is below 36%.',
+                      style: pw.TextStyle(fontSize: 8, color: _muted),
+                    ),
+                  ],
                 ),
-                style: pw.TextStyle(fontSize: 9, color: _slate),
               ),
-            ),
-          ],
-        ),
-    ],
+            ],
+          ),
   );
 }
 
@@ -1227,6 +1744,52 @@ void _paintDonut(PdfGraphics canvas, double w, double h, List<_Slice> slices) {
     ..fillPath();
 }
 
+void _paintGauge(
+  PdfGraphics canvas,
+  double w,
+  double h,
+  double ratio,
+  PdfColor color,
+) {
+  final cx = w / 2;
+  final cy = h / 2;
+  final radius = w / 2 - 8;
+  canvas
+    ..setLineWidth(10)
+    ..setLineCap(PdfLineCap.round)
+    ..setLineJoin(PdfLineJoin.round);
+  _strokeArc(canvas, cx, cy, radius, -math.pi / 2, 2 * math.pi, _borderGrey);
+  _strokeArc(
+    canvas,
+    cx,
+    cy,
+    radius,
+    -math.pi / 2,
+    ratio.clamp(0.0, 1.0) * 2 * math.pi,
+    color,
+  );
+}
+
+void _strokeArc(
+  PdfGraphics canvas,
+  double cx,
+  double cy,
+  double r,
+  double from,
+  double sweep,
+  PdfColor color,
+) {
+  const segments = 60;
+  canvas
+    ..setStrokeColor(color)
+    ..moveTo(cx + r * math.cos(from), cy + r * math.sin(from));
+  for (var i = 1; i <= segments; i++) {
+    final a = from + sweep * i / segments;
+    canvas.lineTo(cx + r * math.cos(a), cy + r * math.sin(a));
+  }
+  canvas.strokePath();
+}
+
 String _maxBarLabel(List<GroupedBar> bars) {
   var maxAbs = 0.0;
   for (final b in bars) {
@@ -1307,6 +1870,15 @@ void _paintLine(
     return PdfPoint(x, y);
   }
 
+  for (var g = 1; g <= 3; g++) {
+    final y = padB + plotH * g / 4;
+    canvas
+      ..setStrokeColor(_borderGrey)
+      ..setLineWidth(0.4)
+      ..drawLine(padL, y, w - padR, y)
+      ..strokePath();
+  }
+
   canvas
     ..setFillColor(PdfColor(color.red, color.green, color.blue, 0.15))
     ..moveTo(at(0).x, padB);
@@ -1355,7 +1927,7 @@ void _paintForecast(
   final solidEnd = firstForecast.clamp(1, values.length - 1);
 
   canvas
-    ..setStrokeColor(_blue)
+    ..setStrokeColor(_forecastActual)
     ..setLineWidth(1.2)
     ..moveTo(at(0).x, at(0).y);
   for (var i = 1; i <= solidEnd; i++) {
@@ -1366,7 +1938,7 @@ void _paintForecast(
 
   if (solidEnd < values.length - 1) {
     canvas
-      ..setStrokeColor(_orange)
+      ..setStrokeColor(_forecastTail)
       ..setLineWidth(1.2)
       ..setLineDashPattern(const [3, 3])
       ..moveTo(at(solidEnd).x, at(solidEnd).y);

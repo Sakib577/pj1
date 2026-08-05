@@ -1092,6 +1092,7 @@ class BudgetCategory {
     required this.startDate,
     this.customDays = 30,
     this.category,
+    this.alertStatus,
   });
 
   final String id;
@@ -1109,6 +1110,10 @@ class BudgetCategory {
   // Name of the expense category this budget tracks, or null for all
   // categories (the default).
   final String? category;
+  // Highest alert state ('Risky' / 'Overspent') already notified for this
+  // budget, so an alert fires only on a fresh escalation. Null once the budget
+  // is back to healthy. Persisted so re-launches do not re-notify.
+  final String? alertStatus;
 
   BudgetCategory copyWith({
     double? spent,
@@ -1119,6 +1124,8 @@ class BudgetCategory {
     DateTime? startDate,
     String? category,
     bool clearCategory = false,
+    String? alertStatus,
+    bool clearAlertStatus = false,
   }) => BudgetCategory(
     id: id,
     label: label ?? this.label,
@@ -1133,6 +1140,7 @@ class BudgetCategory {
     startDate: startDate ?? this.startDate,
     customDays: customDays ?? this.customDays,
     category: clearCategory ? null : category ?? this.category,
+    alertStatus: clearAlertStatus ? null : alertStatus ?? this.alertStatus,
   );
 
   Map<String, dynamic> toMap() => {
@@ -1142,6 +1150,7 @@ class BudgetCategory {
     'startDate': startDate.millisecondsSinceEpoch,
     'customDays': customDays,
     'category': category,
+    'alertStatus': alertStatus,
   };
   factory BudgetCategory.fromMap(String id, Map<String, dynamic> data) =>
       BudgetCategory(
@@ -1163,7 +1172,20 @@ class BudgetCategory {
             .clamp(1, 36500)
             .toInt(),
         category: (data['category'] as String?)?.trim(),
+        alertStatus: (data['alertStatus'] as String?)?.trim().isEmpty == true
+            ? null
+            : (data['alertStatus'] as String?)?.trim(),
       );
+}
+
+// Maps a budget's spending to its alert state: 'Healthy' below 70% of the
+// limit, 'Risky' at 70% or more, and 'Overspent' once 100% is reached.
+String budgetAlertStatus(double spent, double limit) {
+  if (limit <= 0) return 'Healthy';
+  final ratio = spent / limit;
+  if (ratio >= 1) return 'Overspent';
+  if (ratio >= .7) return 'Risky';
+  return 'Healthy';
 }
 
 // Overall savings section summary.

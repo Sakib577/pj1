@@ -36,6 +36,12 @@ class PaymentReminderService {
   static const int _tomorrowIdOffset = 300000;
   static const int _dueIdOffset = 200000;
 
+  static const String _budgetChannelId = 'budget_alerts';
+  static const String _budgetChannelName = 'Budget alerts';
+  static const String _budgetChannelDescription =
+      'Alerts when a budget becomes risky or overspent';
+  static const int _budgetNotificationIdBase = 500000;
+
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
@@ -64,6 +70,18 @@ class PaymentReminderService {
             _channelId,
             _channelName,
             description: _channelDescription,
+            importance: Importance.high,
+          ),
+        );
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _budgetChannelId,
+            _budgetChannelName,
+            description: _budgetChannelDescription,
             importance: Importance.high,
           ),
         );
@@ -171,5 +189,33 @@ class PaymentReminderService {
     final parsed = int.tryParse(id);
     if (parsed != null) return parsed & 0x3FFFFFFF;
     return id.hashCode & 0x3FFFFFFF;
+  }
+
+  /// Shows an immediate local notification for a budget that has become risky
+  /// or overspent. Unlike [scheduleReminders] this fires right away instead of
+  /// being scheduled for a future time.
+  Future<void> showBudgetAlert({
+    required String title,
+    required String body,
+  }) async {
+    await initialize();
+    if (!await _ensurePermission()) return;
+    final id =
+        _budgetNotificationIdBase +
+        (DateTime.now().microsecondsSinceEpoch & 0x3FFFFFFF);
+    await _plugin.show(
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _budgetChannelId,
+          _budgetChannelName,
+          channelDescription: _budgetChannelDescription,
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
+    );
   }
 }

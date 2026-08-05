@@ -633,6 +633,7 @@ class FinanceAppState extends ChangeNotifier {
     _budgets.add(item);
     notifyListeners();
     unawaited(_write((uid) => _financeRepository.saveBudget(uid, item)));
+    _checkBudgetAlerts();
   }
 
   void deleteBudget(String id) {
@@ -648,6 +649,66 @@ class FinanceAppState extends ChangeNotifier {
     _budgets[index] = item;
     notifyListeners();
     unawaited(_write((uid) => _financeRepository.saveBudget(uid, item)));
+    _checkBudgetAlerts();
+  }
+
+  // Re-evaluates every budget against current spending and raises an alert when
+  // a budget first becomes "Risky" (>=70% of its limit spent) or "Overspent"
+  // (>=100% spent). Alerts are recorded in the notification history and shown
+  // as a local notification. A budget only alerts on a fresh escalation, and
+  // the alert resets once spending drops back to healthy.
+  void _checkBudgetAlerts() {
+    if (!_budgetNotificationsEnabled) return;
+    final uid = _syncedUid ?? FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+    for (final budget in budgets) {
+      final current = budgetAlertStatus(budget.spent, budget.limit);
+      final previous = budget.alertStatus;
+      if (current == 'Healthy') {
+        if (previous != null) _setBudgetAlertStatus(budget.id, null);
+        continue;
+      }
+      final isFresh = previous == null ||
+          (current == 'Overspent' && previous != 'Overspent');
+      if (!isFresh) continue;
+      _createBudgetNotification(budget, current);
+      _setBudgetAlertStatus(budget.id, current);
+    }
+  }
+
+  void _createBudgetNotification(BudgetCategory budget, String status) {
+    final now = DateTime.now();
+    final overspent = status == 'Overspent';
+    final title = overspent ? 'Budget overspent' : 'Budget at risk';
+    final spent = formatCurrency(budget.spent);
+    final limit = formatCurrency(budget.limit);
+    final body = overspent
+        ? '${budget.label} has exceeded its $limit limit with $spent spent.'
+        : '${budget.label} is running low. $spent of $limit already spent.';
+    final id = 'budget-${budget.id}-$status';
+    _notifications.removeWhere((item) => item.id == id);
+    final item = AppNotification(id: id, title: title, body: body, createdAt: now);
+    _notifications.add(item);
+    unawaited(_write((uid) => _financeRepository.saveNotification(uid, item)));
+    unawaited(
+      PaymentReminderService.instance.showBudgetAlert(
+        title: title,
+        body: body,
+      ),
+    );
+    notifyListeners();
+  }
+
+  void _setBudgetAlertStatus(String id, String? status) {
+    final index = _budgets.indexWhere((budget) => budget.id == id);
+    if (index == -1) return;
+    final updated = _budgets[index].copyWith(
+      alertStatus: status,
+      clearAlertStatus: status == null,
+    );
+    _budgets[index] = updated;
+    notifyListeners();
+    unawaited(_write((uid) => _financeRepository.saveBudget(uid, updated)));
   }
 
   void addSavingsGoal(String title, double target) {
@@ -948,6 +1009,8 @@ class FinanceAppState extends ChangeNotifier {
     _syncReminders();
     notifyListeners();
 
+    _checkBudgetAlerts();
+
     _transactionSubscription = _financeRepository
         .watchRecentTransactions(uid)
         .listen(
@@ -1000,6 +1063,7 @@ class FinanceAppState extends ChangeNotifier {
         ..clear()
         ..addAll(items);
       notifyListeners();
+      _checkBudgetAlerts();
     });
     _goalSubscription = _financeRepository.watchSavingsGoals(uid).listen((
       items,
@@ -1046,6 +1110,7 @@ class FinanceAppState extends ChangeNotifier {
         );
       _recomputeTotals();
       notifyListeners();
+      _checkBudgetAlerts();
     } catch (_) {
       // The recent cache remains available when the server is unreachable.
     }
@@ -1422,6 +1487,7 @@ class FinanceAppState extends ChangeNotifier {
     unawaited(
       _write((uid) => _financeRepository.saveTransaction(uid, transaction)),
     );
+    _checkBudgetAlerts();
   }
 
   void updateTransaction(TransactionItem updated) {
@@ -1438,6 +1504,7 @@ class FinanceAppState extends ChangeNotifier {
         ),
       );
     }
+    _checkBudgetAlerts();
   }
 
   void deleteTransaction(String id) {
@@ -1494,6 +1561,7 @@ class FinanceAppState extends ChangeNotifier {
     _recomputeTotals();
     notifyListeners();
     unawaited(_write((uid) => _financeRepository.deleteTransaction(uid, id)));
+    _checkBudgetAlerts();
   }
 
   Future<void> _persistCategory({

@@ -4,12 +4,28 @@ import 'package:flutter/material.dart';
 class BalanceSummary {
   const BalanceSummary({
     required this.total,
-    required this.deltaPercent,
+    required this.incomeThisMonth,
+    required this.expensesThisMonth,
+    required this.savingsRate,
+    required this.flowDeltaPercent,
+    required this.hasFlowBaseline,
     this.isPositive = true,
   });
 
   final double total;
-  final double deltaPercent;
+
+  final double incomeThisMonth;
+  final double expensesThisMonth;
+
+  // (income - expenses) / income for the current month, as a percentage.
+  final double savingsRate;
+
+  // Percentage change of this month's net flow (income - expenses) compared to
+  // last month's. Only meaningful when [hasFlowBaseline] is true.
+  final double flowDeltaPercent;
+
+  // Whether last month had a non-zero net flow to compare against.
+  final bool hasFlowBaseline;
   final bool isPositive;
 }
 

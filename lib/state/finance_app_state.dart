@@ -88,11 +88,53 @@ class FinanceAppState extends ChangeNotifier {
     super.dispose();
   }
 
-  BalanceSummary get balanceSummary => BalanceSummary(
-    total: _balance,
-    deltaPercent: 0,
-    isPositive: _balance >= 0,
-  );
+  BalanceSummary get balanceSummary {
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month);
+    final lastMonthStart = DateTime(now.year, now.month - 1);
+
+    final current = _monthTotals(monthStart);
+    final previous = _monthTotals(lastMonthStart);
+
+    final netFlow = current.$1 - current.$2;
+    final prevNetFlow = previous.$1 - previous.$2;
+    final flowDeltaPercent = prevNetFlow == 0
+        ? 0.0
+        : ((netFlow - prevNetFlow) / prevNetFlow.abs()) * 100;
+    final savingsRate = current.$1 == 0
+        ? 0.0
+        : ((current.$1 - current.$2) / current.$1) * 100;
+
+    return BalanceSummary(
+      total: _balance,
+      incomeThisMonth: current.$1,
+      expensesThisMonth: current.$2,
+      savingsRate: savingsRate,
+      flowDeltaPercent: flowDeltaPercent,
+      hasFlowBaseline: prevNetFlow != 0,
+      isPositive: netFlow >= prevNetFlow,
+    );
+  }
+
+  // Income / expenses of the calendar month starting at [monthStart].
+  (double, double) _monthTotals(DateTime monthStart) {
+    final monthEnd = DateTime(monthStart.year, monthStart.month + 1);
+    var income = 0.0;
+    var expenses = 0.0;
+    for (final transaction in _transactions) {
+      final created = transaction.createdAt;
+      if (created == null) continue;
+      if (created.isBefore(monthStart) || !created.isBefore(monthEnd)) {
+        continue;
+      }
+      if (transaction.negative) {
+        expenses += transaction.amount;
+      } else {
+        income += transaction.amount;
+      }
+    }
+    return (income, expenses);
+  }
 
   List<StatCardData> get stats => [
     StatCardData(

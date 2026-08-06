@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -945,35 +947,119 @@ class _BalanceCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF1D6),
-              borderRadius: BorderRadius.circular(20),
+          _BalanceDeltaChip(summary: summary),
+        ],
+      ),
+    );
+  }
+}
+
+/// Auto-cycles between monthly balance metrics so the card stays compact but
+/// informative. Each view is labelled so it is clear what is shown.
+class _BalanceDeltaChip extends StatefulWidget {
+  const _BalanceDeltaChip({required this.summary});
+
+  final BalanceSummary summary;
+
+  @override
+  State<_BalanceDeltaChip> createState() => _BalanceDeltaChipState();
+}
+
+class _BalanceDeltaChipState extends State<_BalanceDeltaChip> {
+  static const _interval = Duration(seconds: 4);
+
+  Timer? _timer;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(_interval, (_) {
+      setState(() => _index = (_index + 1) % _views.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  List<_ChipView> get _views {
+    final summary = widget.summary;
+    return [
+      _ChipView(
+        icon: summary.isPositive ? Icons.trending_up : Icons.trending_down,
+        label: 'FLOW',
+        value: _flowLabel(summary),
+      ),
+      _ChipView(
+        icon: Icons.savings_outlined,
+        label: 'SAVED',
+        value: _savingsLabel(summary),
+      ),
+    ];
+  }
+
+  String _flowLabel(BalanceSummary summary) {
+    if (!summary.hasFlowBaseline) {
+      final netFlow = summary.incomeThisMonth - summary.expensesThisMonth;
+      return netFlow == 0 ? '0.0% vs last month' : 'new this month';
+    }
+    final sign = summary.flowDeltaPercent >= 0 ? '+' : '';
+    return '$sign${summary.flowDeltaPercent.toStringAsFixed(1)}% vs last month';
+  }
+
+  String _savingsLabel(BalanceSummary summary) {
+    if (summary.incomeThisMonth == 0) return '— this month';
+    return '${summary.savingsRate.toStringAsFixed(0)}% of income';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final view = _views[_index % _views.length];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1D6),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(view.icon, size: 16, color: const Color(0xFFF59E0B)),
+          const SizedBox(width: 6),
+          Text(
+            '${view.label} · ',
+            style: const TextStyle(
+              fontSize: 11,
+              color: Color(0xFFB45309),
+              fontWeight: FontWeight.w600,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  summary.isPositive ? Icons.trending_up : Icons.trending_down,
-                  size: 16,
-                  color: const Color(0xFFF59E0B),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '${summary.deltaPercent.toStringAsFixed(1)}% this month',
-                  style: const TextStyle(
-                    color: Color(0xFFF59E0B),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+          ),
+          Text(
+            view.value,
+            style: const TextStyle(
+              color: Color(0xFFF59E0B),
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _ChipView {
+  const _ChipView({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
 }
 
 class _StatsRow extends StatelessWidget {

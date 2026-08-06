@@ -17,12 +17,12 @@
     android:layout_height="match_parent"
     android:orientation="horizontal">
 
-    <!-- Balance card (left, ~65%) -->
+    <!-- Balance card (left half) -->
     <FrameLayout
         android:id="@+id/balance_card"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="2.1"
+        android:layout_weight="1"
         android:layout_marginEnd="4dp">
 
         <LinearLayout
@@ -56,7 +56,7 @@
         </LinearLayout>
     </FrameLayout>
 
-    <!-- Income / Expense column (right, ~35%) -->
+    <!-- Income / Expense column (right half) -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"

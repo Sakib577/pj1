@@ -258,13 +258,13 @@ object WidgetViews {
                 if (height < 0) height = info.minHeight
             }
         }
-        val wide = width >= 240
+        val wide = width >= 310
         val tall = height >= 110
         return when {
-            tall && wide -> WidgetBucket.LARGE // 4x2
-            tall -> WidgetBucket.MEDIUM // 3x2
-            wide -> WidgetBucket.WIDE // 4x1
-            else -> WidgetBucket.COMPACT // 3x1
+            tall && wide -> WidgetBucket.LARGE // 5x2
+            tall -> WidgetBucket.MEDIUM // 4x2
+            wide -> WidgetBucket.WIDE // 5x1
+            else -> WidgetBucket.COMPACT // 4x1 (and smaller on resize)
         }
     }
 

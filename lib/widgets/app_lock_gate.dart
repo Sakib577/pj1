@@ -288,6 +288,15 @@ class _AppLockScope extends InheritedWidget {
       context.dependOnInheritedWidgetOfExactType<_AppLockScope>()?.unlockReady ??
       Future<void>.value();
 
+  // Read-only variants used from async callbacks where registering an
+  // InheritedWidget dependency (and forcing rebuilds) is undesirable.
+  static bool unlockedFromNow(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<_AppLockScope>()?.unlocked ?? true;
+
+  static Future<void> unlockReadyFromNow(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<_AppLockScope>()?.unlockReady ??
+      Future<void>.value();
+
   @override
   bool updateShouldNotify(_AppLockScope oldWidget) =>
       unlocked != oldWidget.unlocked || unlockReady != oldWidget.unlockReady;
@@ -299,4 +308,12 @@ extension AppLockContext on BuildContext {
   /// Completes once the current lock session has been verified (or the app
   /// lock is disabled), so prompts only appear after the lock screen.
   Future<void> get appLockUnlockReady => _AppLockScope.unlockReadyFrom(this);
+
+  /// Like [appLockUnlocked] but reads the current value without registering a
+  /// dependency, safe to call from event handlers / async code.
+  bool get appLockUnlockedNow => _AppLockScope.unlockedFromNow(this);
+
+  /// Like [appLockUnlockReady] but reads the current future without
+  /// registering a dependency, safe to call from event handlers / async code.
+  Future<void> get appLockUnlockReadyNow => _AppLockScope.unlockReadyFromNow(this);
 }

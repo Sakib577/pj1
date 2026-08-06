@@ -7,7 +7,11 @@ import '../state/finance_app_state.dart';
 import '../utils/currency_settings.dart';
 
 class AddTransactionPage extends StatefulWidget {
-  const AddTransactionPage({super.key});
+  const AddTransactionPage({super.key, this.initialIsIncome});
+
+  /// Preselects the Income tab (instead of the default Expense tab). Used by
+  /// the home-screen widget deep links so the tab matches the tapped card.
+  final bool? initialIsIncome;
 
   @override
   State<AddTransactionPage> createState() => _AddTransactionPageState();
@@ -15,7 +19,7 @@ class AddTransactionPage extends StatefulWidget {
 
 class _AddTransactionPageState extends State<AddTransactionPage> {
   final TextEditingController _noteController = TextEditingController();
-  bool _isIncome = false;
+  late bool _isIncome = widget.initialIsIncome ?? false;
   String _amountExpression = '0';
   ExpenseCategory? _selectedCategory;
   String? _selectedSubcategory;

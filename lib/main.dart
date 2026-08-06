@@ -12,8 +12,10 @@ import 'package:path_provider/path_provider.dart';
 import 'auth_gate.dart';
 import 'firebase_options.dart';
 import 'services/currency_preferences.dart';
+import 'services/home_widget_service.dart';
 import 'state/finance_app_state.dart';
 import 'widgets/app_lock_gate.dart';
+import 'widgets/widget_deep_link_router.dart';
 
 // Global error handler flag — keep at top level so it survives hot restart.
 // Holds the most recent crash message so the UI can render it instead of a
@@ -203,6 +205,9 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _onAppStateChanged() {
+    // Mirror the latest totals/currency to the native home-screen widget
+    // whenever the app state changes (deduplicated on unchanged payloads).
+    unawaited(HomeWidgetService.instance.updateFromState(_appState));
     if (!mounted) return;
     if (SchedulerBinding.instance.schedulerPhase ==
         SchedulerPhase.persistentCallbacks) {
@@ -251,7 +256,9 @@ class _MyAppState extends State<MyApp> {
         ),
         home: AnnotatedRegion<SystemUiOverlayStyle>(
           value: SystemUiOverlayStyle.dark,
-          child: AppLockGate(child: widget.home ?? const AuthGate()),
+          child: AppLockGate(
+            child: WidgetDeepLinkRouter(child: widget.home ?? const AuthGate()),
+          ),
         ),
       ),
     );

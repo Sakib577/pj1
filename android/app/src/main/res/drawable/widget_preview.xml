@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Preview shown in the launcher's widget picker. Approximates the widget:
+     orange Balance card on the left, Income/Expense cards on the right. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#F7F5EF" />
+        </shape>
+    </item>
+
+    <!-- Balance card (orange gradient) -->
+    <item
+        android:left="8dp"
+        android:top="8dp"
+        android:bottom="8dp"
+        android:right="52dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#F59E0B"
+                android:endColor="#D97706"
+                android:angle="0" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+
+    <!-- Income card -->
+    <item
+        android:left="56dp"
+        android:top="8dp"
+        android:right="8dp"
+        android:bottom="30dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFF" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+
+    <!-- Expense card -->
+    <item
+        android:left="56dp"
+        android:top="34dp"
+        android:right="8dp"
+        android:bottom="8dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFF" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+</layer-list>

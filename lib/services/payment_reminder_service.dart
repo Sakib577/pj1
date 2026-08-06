@@ -88,14 +88,21 @@ class PaymentReminderService {
     _initialized = true;
   }
 
-  Future<bool> _ensurePermission() async {
+  Future<bool>? _permissionRequest;
+
+  Future<bool> _ensurePermission() {
+    if (_permissionRequest != null) return _permissionRequest!;
     final android = _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >();
-    if (android == null) return true;
-    final granted = await android.requestNotificationsPermission();
-    return granted ?? true;
+    if (android == null) {
+      return Future.value(true);
+    }
+    _permissionRequest = android.requestNotificationsPermission().then((granted) {
+      return granted ?? true;
+    });
+    return _permissionRequest!;
   }
 
   /// Replaces all pending reminders with fresh ones for [payments].

@@ -50,6 +50,7 @@ class _WidgetDeepLinkRouterState extends State<WidgetDeepLinkRouter>
 
   @override
   void dispose() {
+    HomeWidgetService.instance.setOnPendingChanged(() {});
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

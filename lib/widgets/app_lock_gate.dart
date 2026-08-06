@@ -217,6 +217,7 @@ class _AppLockGateState extends State<AppLockGate>
     if (lockType == LockType.none || user == null || !_locked) {
       return _AppLockScope(
         unlocked: true,
+        unlockedThisSession: _unlockedThisSession,
         unlockReady: _unlockReady.value,
         child: widget.child,
       );
@@ -225,6 +226,7 @@ class _AppLockGateState extends State<AppLockGate>
     final isPin = lockType == LockType.pin;
     return _AppLockScope(
       unlocked: false,
+      unlockedThisSession: _unlockedThisSession,
       unlockReady: _unlockReady.value,
       child: Scaffold(
         backgroundColor: const Color(0xFFF7F5EF),
@@ -273,11 +275,13 @@ class _AppLockGateState extends State<AppLockGate>
 class _AppLockScope extends InheritedWidget {
   const _AppLockScope({
     required this.unlocked,
+    required this.unlockedThisSession,
     required this.unlockReady,
     required super.child,
   });
 
   final bool unlocked;
+  final bool unlockedThisSession;
   final Future<void> unlockReady;
 
   static bool unlockedFrom(BuildContext context) =>
@@ -293,13 +297,21 @@ class _AppLockScope extends InheritedWidget {
   static bool unlockedFromNow(BuildContext context) =>
       context.getInheritedWidgetOfExactType<_AppLockScope>()?.unlocked ?? true;
 
+  static bool unlockedThisSessionFromNow(BuildContext context) =>
+      context
+          .getInheritedWidgetOfExactType<_AppLockScope>()
+          ?.unlockedThisSession ??
+      false;
+
   static Future<void> unlockReadyFromNow(BuildContext context) =>
       context.getInheritedWidgetOfExactType<_AppLockScope>()?.unlockReady ??
       Future<void>.value();
 
   @override
   bool updateShouldNotify(_AppLockScope oldWidget) =>
-      unlocked != oldWidget.unlocked || unlockReady != oldWidget.unlockReady;
+      unlocked != oldWidget.unlocked ||
+      unlockedThisSession != oldWidget.unlockedThisSession ||
+      unlockReady != oldWidget.unlockReady;
 }
 
 extension AppLockContext on BuildContext {
@@ -312,6 +324,12 @@ extension AppLockContext on BuildContext {
   /// Like [appLockUnlocked] but reads the current value without registering a
   /// dependency, safe to call from event handlers / async code.
   bool get appLockUnlockedNow => _AppLockScope.unlockedFromNow(this);
+
+  /// Whether the app lock has been verified for the current session (false
+  /// until a configured lock has been shown and successfully released). Used
+  /// by deep-link routing so a widget tap can never open past the lock.
+  bool get appLockUnlockedThisSessionNow =>
+      _AppLockScope.unlockedThisSessionFromNow(this);
 
   /// Like [appLockUnlockReady] but reads the current future without
   /// registering a dependency, safe to call from event handlers / async code.

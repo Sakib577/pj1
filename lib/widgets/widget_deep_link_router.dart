@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../pages/add_transaction_page.dart';
+import '../services/app_lock_service.dart';
 import '../services/home_widget_service.dart';
 import '../state/finance_app_state.dart';
 import 'app_lock_gate.dart';
@@ -91,8 +92,15 @@ class _WidgetDeepLinkRouterState extends State<WidgetDeepLinkRouter>
       await SchedulerBinding.instance.endOfFrame;
       await SchedulerBinding.instance.endOfFrame;
       if (!mounted) return;
-      // Wait until the initial data load has settled AND the app is unlocked.
-      while (!_appReadyAndUnlocked() && mounted) {
+      // Wait until the initial data load has settled AND the app is unlocked
+      // for this session (a configured lock must have been shown and released).
+      // Security: the gate engages the lock about a frame after lockType loads
+      // (which happens just before isLoadingData settles), so the app can
+      // briefly report "unlocked" here. gating on unlockedThisSession means a
+      // widget tap can never open past a lock that is about to engage; if the
+      // lock takes over, this router is unmounted and the buffered intent is
+      // retried from initState after the user verifies.
+      while (mounted && !_appReadyAndUnlocked()) {
         await Future<void>.delayed(const Duration(milliseconds: 80));
       }
       if (!mounted) return;
@@ -112,9 +120,17 @@ class _WidgetDeepLinkRouterState extends State<WidgetDeepLinkRouter>
   }
 
   bool _appReadyAndUnlocked() {
+    if (!mounted) return false;
     final scope = context.getInheritedWidgetOfExactType<FinanceAppScope>();
-    final appReady = scope == null || !scope.state.isLoadingData;
-    return appReady && context.appLockUnlockedNow;
+    if (scope == null) return false;
+    if (scope.state.isLoadingData) return false;
+    final lockType = scope.state.lockType;
+    if (lockType == LockType.none) return true;
+    // A lock is configured: it is only safe to route once it has been shown
+    // and successfully released this session (the gate unmounts this router
+    // while the lock screen is on top and re-mounts it after verification).
+    return context.appLockUnlockedNow &&
+        context.appLockUnlockedThisSessionNow;
   }
 
   @override

@@ -72,6 +72,12 @@ class _WidgetDeepLinkRouterState extends State<WidgetDeepLinkRouter>
     final intent = await HomeWidgetService.instance.pullPendingIntent();
     if (intent == null) return;
     await _routeIntent(intent);
+    // A newer tap may have replaced [intent] while it was in flight (the
+    // finally below leaves it buffered). Route that one now.
+    final next = await HomeWidgetService.instance.pullPendingIntent();
+    if (next != null && !identical(next, intent)) {
+      unawaited(_routeIntent(next));
+    }
   }
 
   Future<void> _routeIntent(HomeWidgetIntent intent) async {
@@ -115,7 +121,7 @@ class _WidgetDeepLinkRouterState extends State<WidgetDeepLinkRouter>
     } finally {
       _routing = false;
       if (mounted) {
-        HomeWidgetService.instance.consumePendingIntent();
+        HomeWidgetService.instance.consumePendingIntentIf(intent);
       }
     }
   }

@@ -125,6 +125,16 @@ class HomeWidgetService {
     _pendingAt = null;
   }
 
+  /// Clears the buffered intent, but only if it is still [intent] (by
+  /// identity). Routing consumes the intent it just handled without erasing a
+  /// newer one that arrived while it was in flight — the newer tap is routed
+  /// next instead (last tap wins).
+  void consumePendingIntentIf(HomeWidgetIntent intent) {
+    if (identical(_pendingIntent, intent)) {
+      consumePendingIntent();
+    }
+  }
+
   bool _isStale(DateTime? at) =>
       at != null && DateTime.now().difference(at) > const Duration(minutes: 2);
 

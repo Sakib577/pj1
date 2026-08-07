@@ -99,6 +99,9 @@ class _StatDonutChartState extends State<StatDonutChart> {
                     return;
                   }
                   final idx = response.touchedSection!.touchedSectionIndex;
+                  if (idx < 0 || idx >= widget.slices.length) {
+                    return;
+                  }
                   setState(() {
                     _selected = widget.slices[idx];
                   });

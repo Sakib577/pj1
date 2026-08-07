@@ -1,0 +1,39 @@
+FEATURES
+
+STATUS LEGEND
+✅ = Fully implemented and verified in the source code
+⚠️ = Partially implemented (the missing part is listed in "MISSING / PARTIAL")
+
+CORE FINANCE
+- ✅ Transactions: add/edit/delete income & expense entries with categories, notes, and timestamps.
+- ✅ Categories: custom income/expense categories with icons, colors, and subcategories.
+- ✅ Budgets: per-category and rolling-period budgets with progress and overspend alerts.
+- ⚠️ Savings Goals: target amounts and contribution-linked progress. Deadlines are NOT implemented.
+- ⚠️ Debts: track borrowed/lent amounts with settlement status. Due dates are NOT implemented.
+- ✅ Planned Payments: scheduled payments with local notification reminders.
+- ⚠️ Shopping Lists: categorized lists with purchase tracking. Cost estimates are NOT implemented.
+
+ANALYTICS & REPORTS
+- ✅ Statistics Dashboard: trend lines, income vs expense, cash flow with net line, savings trend,
+  balance history, category donut, spending patterns, top expenses, budget progress,
+  cash-flow forecast, and next-month estimates.
+- ✅ Reports: Cash Flow Statement, Income Statement, Balance Sheet, Budget vs Actual, Debt,
+  Savings & Net Worth for a selectable period.
+- ✅ Export: PDF and CSV export of reports and transaction history via the share sheet.
+
+TOOLS & PLATFORM
+- ✅ Currency Converter: real-time exchange-rate conversion.
+- ✅ Multi-Currency: selectable display currency with live exchange rates.
+
+SECURITY & UX
+- ✅ Firebase Auth with Google Sign-In and email verification.
+- ✅ Biometric/PIN app lock.
+- ✅ Home-screen widget with balance preview.
+- ✅ Notification history and settings.
+- ✅ Offline-first support via Firestore offline persistence.
+- ✅ Crash error screen with persisted crash log.
+
+MISSING / PARTIAL (from the original list, not implemented in code)
+- ⚠️ Savings Goals: "deadlines" — there is no target-date/deadline field on the savings goal model or page.
+- ⚠️ Debts: "due dates" — the debt record has no due-date field (only borrowed/lent, settlement, partial repayments).
+- ⚠️ Shopping Lists: "cost estimates" — items only store a price when completed; there is no pre-set estimated cost.
